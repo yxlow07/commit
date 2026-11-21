@@ -6,13 +6,12 @@ import android.content.Intent
 import dev.yxuan.commit.AppContainer
 import dev.yxuan.commit.appContainer
 import dev.yxuan.commit.domain.RecapKind
+import dev.yxuan.commit.domain.ReminderText
 import dev.yxuan.commit.domain.Recurrence
 import dev.yxuan.commit.domain.TodoItem
 import dev.yxuan.commit.notify.Notifications
 import dev.yxuan.commit.notify.RecapNotification
 import kotlinx.coroutines.launch
-import java.time.Instant
-import java.time.format.DateTimeFormatter
 
 /** Runs suspending work from a receiver, keeping the process alive until it finishes. */
 fun BroadcastReceiver.launchAsync(context: Context, block: suspend AppContainer.() -> Unit) {
@@ -34,18 +33,18 @@ class AlarmReceiver : BroadcastReceiver() {
         launchAsync(context) {
             when (kind) {
                 AlarmKind.TODO_DUE -> {
+                    alarmScheduler.clearSnooze(id)
                     val todo = todoRepository.get(id)
                     if (todo != null && !todo.deleted && todo.doneAt == null && todo.dueAt != null) {
-                        // Fires at the due time, so say "Due now" rather than the formatter's "Overdue".
-                        val time = Instant.ofEpochMilli(todo.dueAt).atZone(clock.zone).format(DateTimeFormatter.ofPattern("HH:mm"))
-                        val label = "Due now · $time"
+                        // Early with a lead time, on time, or late after a snooze (not the list's "Overdue").
+                        val label = ReminderText.label(todo.dueAt, clock.millis(), clock.zone)
                         Notifications.post(context, Notifications.todoNotificationId(id), Notifications.todoReminder(context, todo, label))
                     }
                 }
                 AlarmKind.CHORE_DUE -> {
                     val todo = todoRepository.get(id)
                     if (todo != null && !todo.deleted && Recurrence.isRecurring(todo) && !TodoItem.of(todo, clock).isDone) {
-                        val text = "Due today · ${Recurrence.intervalLabel(todo.recurIntervalDays ?: 1)}"
+                        val text = "Due today · ${Recurrence.label(todo)}"
                         Notifications.post(context, Notifications.todoNotificationId(id), Notifications.todoReminder(context, todo, text))
                     }
                 }

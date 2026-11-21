@@ -65,19 +65,26 @@ export interface TodoInput {
   dueAt: number | null;
   hasTime: boolean;
   repeatDays: number | null;
+  recurDays?: number | null;
+  reminderLeadMinutes?: number | null;
 }
 
 export const createTodo = (qc: QueryClient, input: TodoInput) =>
   insertRow(qc, "todos", {
     id: crypto.randomUUID(), commitment_id: input.commitmentId, title: input.title.trim(),
     due_at: input.dueAt, has_time: input.hasTime ? 1 : 0, done_at: null,
-    recur_interval_days: input.repeatDays && input.repeatDays > 0 ? input.repeatDays : null, last_done_at: null,
+    recur_interval_days: input.repeatDays && input.repeatDays > 0 ? input.repeatDays : null,
+    recur_days: input.recurDays && input.recurDays > 0 ? input.recurDays : null,
+    last_done_at: null,
+    reminder_lead_minutes: input.reminderLeadMinutes ?? null,
   });
 
 export const updateTodo = (qc: QueryClient, id: string, input: TodoInput) =>
   updateRow(qc, "todos", id, {
     title: input.title.trim(), commitment_id: input.commitmentId, due_at: input.dueAt, has_time: input.hasTime ? 1 : 0,
     recur_interval_days: input.repeatDays && input.repeatDays > 0 ? input.repeatDays : null,
+    recur_days: input.recurDays && input.recurDays > 0 ? input.recurDays : null,
+    reminder_lead_minutes: input.reminderLeadMinutes ?? null,
   });
 
 export const deleteTodo = (qc: QueryClient, id: string) => softDelete(qc, "todos", id);
@@ -148,3 +155,19 @@ export async function saveSettings(qc: QueryClient, userId: string, current: Set
   if (current) return updateRow(qc, "settings", current.id, changes);
   return insertRow(qc, "settings", { id: settingsId(userId), ...DEFAULT_SETTINGS, ...changes } as Insert<"settings">);
 }
+
+// ---- Themes (F9) ----
+
+export const createTheme = (qc: QueryClient, name: string, json: string) =>
+  insertRow(qc, "themes", {
+    id: crypto.randomUUID(),
+    name: name.trim(),
+    json,
+  });
+
+export const deleteTheme = async (qc: QueryClient, id: string, activeId: string | null, userId: string) => {
+  await softDelete(qc, "themes", id);
+  if (activeId === id) {
+    await updateRow(qc, "settings", settingsId(userId), { active_theme_id: null });
+  }
+};

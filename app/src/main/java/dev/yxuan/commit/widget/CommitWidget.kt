@@ -51,9 +51,13 @@ import dev.yxuan.commit.data.db.entity.CommitmentEntity
 import dev.yxuan.commit.data.db.entity.CommitmentType
 import dev.yxuan.commit.data.repo.LiveWorkout
 import dev.yxuan.commit.domain.TodoItem
+import dev.yxuan.commit.domain.theme.ActiveTheme
+import dev.yxuan.commit.domain.theme.ThemeMode
 import dev.yxuan.commit.quickadd.QuickAddActivity
 import dev.yxuan.commit.ui.format.DueFormatter
 import dev.yxuan.commit.ui.format.DueStatus
+import dev.yxuan.commit.ui.theme.colorSchemeFor
+import androidx.glance.material3.ColorProviders
 import kotlinx.coroutines.flow.first
 import java.time.Clock
 
@@ -80,11 +84,13 @@ class CommitWidget : GlanceAppWidget() {
         val todosFlow = container.todoRepository.observeOpenForWidget()
         val routinesFlow = container.routineRepository.observeSummaries()
         val liveFlow = container.workoutRepository.observeLive()
+        val themeFlow = container.themeRepository.observeActive()
         // Load once up front so the first frame already has data (no empty flash).
         val initialTabs = tabsFlow.first()
         val initialTodos = todosFlow.first()
         val initialRoutines = routinesFlow.first()
         val initialLive = liveFlow.first()
+        val initialTheme = themeFlow.first()
         val clock = container.clock
 
         provideContent {
@@ -92,11 +98,25 @@ class CommitWidget : GlanceAppWidget() {
             val todos by todosFlow.collectAsState(initialTodos)
             val routines by routinesFlow.collectAsState(initialRoutines)
             val live by liveFlow.collectAsState(initialLive)
+            val activeTheme by themeFlow.collectAsState(initialTheme)
             val selectedId = currentState<Preferences>()[SelectedCommitmentKey]
             // Fall back to the first tab if the stored one was archived, deleted or hidden.
             val selected = tabs.firstOrNull { it.id == selectedId } ?: tabs.firstOrNull()
 
-            GlanceTheme {
+            val glanceColors = when (val t = activeTheme) {
+                is ActiveTheme.Dynamic -> GlanceTheme.colors
+                is ActiveTheme.Fixed -> {
+                    val lightScheme = colorSchemeFor(t.spec.light, isDark = false)
+                    val darkScheme = colorSchemeFor(t.spec.dark, isDark = true)
+                    when (t.mode) {
+                        ThemeMode.SYSTEM -> ColorProviders(light = lightScheme, dark = darkScheme)
+                        ThemeMode.LIGHT -> ColorProviders(light = lightScheme, dark = lightScheme)
+                        ThemeMode.DARK -> ColorProviders(light = darkScheme, dark = darkScheme)
+                    }
+                }
+            }
+
+            GlanceTheme(colors = glanceColors) {
                 WidgetContent(
                     tabs = tabs,
                     selected = selected,

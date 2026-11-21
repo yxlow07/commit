@@ -35,6 +35,7 @@ import androidx.lifecycle.lifecycleScope
 import dev.yxuan.commit.appContainer
 import dev.yxuan.commit.data.db.entity.CommitmentType
 import dev.yxuan.commit.data.repo.Due
+import dev.yxuan.commit.domain.theme.ActiveTheme
 import dev.yxuan.commit.ui.theme.CommitTheme
 import dev.yxuan.commit.ui.todos.TodoForm
 import dev.yxuan.commit.widget.CommitmentIdParam
@@ -53,14 +54,18 @@ class QuickAddActivity : ComponentActivity() {
         val container = appContainer
         val commitmentsFlow = container.commitmentRepository.observeActive()
             .map { list -> list.filter { it.type == CommitmentType.STANDARD } }
+        val themeFlow = container.themeRepository.observeActive()
 
         setContent {
-            CommitTheme {
+            val activeTheme by themeFlow.collectAsState(ActiveTheme.Dynamic)
+            CommitTheme(active = activeTheme) {
                 val commitments by commitmentsFlow.collectAsState(emptyList())
                 var title by rememberSaveable { mutableStateOf("") }
                 var commitmentId by rememberSaveable { mutableStateOf(initialCommitment) }
                 var due by remember { mutableStateOf<Due?>(null) }
                 var repeatDays by rememberSaveable { mutableStateOf<Int?>(null) }
+                var recurDays by rememberSaveable { mutableStateOf<Int?>(null) }
+                var reminderLeadMinutes by rememberSaveable { mutableStateOf<Int?>(null) }
                 var saving by remember { mutableStateOf(false) }
 
                 // A workout tab (or a stale id) can't hold todos: fall back to the first todo commitment.
@@ -76,7 +81,7 @@ class QuickAddActivity : ComponentActivity() {
                     if (canSave && target != null) {
                         saving = true
                         lifecycleScope.launch {
-                            container.todoRepository.add(target, title, due, repeatDays)
+                            container.todoRepository.add(target, title, due, repeatDays, recurDays, reminderLeadMinutes)
                             finish()
                         }
                     }
@@ -97,6 +102,10 @@ class QuickAddActivity : ComponentActivity() {
                         onDueChange = { due = it },
                         repeatDays = repeatDays,
                         onRepeatChange = { repeatDays = it },
+                        recurDays = recurDays,
+                        onRecurDaysChange = { recurDays = it },
+                        reminderLeadMinutes = reminderLeadMinutes,
+                        onReminderLeadChange = { reminderLeadMinutes = it },
                         titleFocusRequester = focus,
                         onDone = save,
                     )

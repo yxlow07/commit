@@ -398,3 +398,121 @@ Straight ports of the Kotlin code, with the same unit-test cases (Vitest), so ph
    - A second Google account sees none of this data (RLS).
 4. Deploy to Cloudflare Pages; repeat sign-in and one live-update check on the deployed URL.
 5. Append M8 to `app/PLAN.md` and results to `app/RESULTS.md`.
+
+
+---
+
+# Plan: Commit — M9 (Themes)
+
+## Context
+M1–M8 are done: the Android app (widget, recurring chores, workouts, recaps, history), hand-written sync with Supabase, and the web app live at https://commit.yxuan.dev. M9 is the last PRD milestone: themes (F9.1–F9.4). Today the app still uses the template's purple theme / Material You, the widget uses Glance defaults, and the web has fixed colour tokens in `web/app/globals.css`.
+
+Decisions made with the user:
+- **Full scope**: theme format + import + picker + built-ins on the phone (F9.1–F9.3), **and** synced themes + the web app using the same theme as CSS variables (F9.4).
+- **The widget follows the theme** (open PRD question).
+- **A theme sets** light and dark colour sets, a corner radius and a font family from a fixed list (`default`, `serif`, `mono`, `rounded`). Design values only, no code (F9.1).
+
+The database is ready: `themes(id, name, json)` and `settings.active_theme_id` exist on phone and server and are already synced (`SyncEngine.TABLES` includes `themes`). No schema change.
+
+## 1. Theme format (shared) — `themes/`
+- `themes/theme.schema.json` (JSON Schema, for people writing themes) and `themes/README.md` (fields, example, how to import).
+- Format v1:
+  ```json
+  { "schemaVersion": 1, "name": "Ocean",
+    "light": { "primary": "#1E5AA8", "onPrimary": "#FFFFFF", "primaryContainer": "…", "onPrimaryContainer": "…",
+               "secondary": "…", "onSecondary": "…", "secondaryContainer": "…", "onSecondaryContainer": "…",
+               "background": "…", "onBackground": "…", "surface": "…", "onSurface": "…",
+               "surfaceVariant": "…", "onSurfaceVariant": "…", "outline": "…", "error": "…", "onError": "…" },
+    "dark": { …same keys… },
+    "shape": { "cornerRadius": 16 },
+    "font": "rounded" }
+  ```
+- Rules (identical on phone and web): `schemaVersion` must be 1; `name` 1–40 chars; colours `#RRGGBB` or `#AARRGGBB`; `cornerRadius` 0–32; `font` one of the four; file ≤ 32 KB; unknown keys ignored. **Missing values are filled from the default theme** (F9.2); a theme with only `light` gets the default dark set. Invalid files are rejected with a list of clear messages ("light.primary: '#12345' is not a colour like #1E5AA8").
+- `themes/examples/`: 3 example themes (Ocean, Forest, High contrast), also served by the web app at `https://commit.yxuan.dev/themes/*.json`, so they double as import-by-link samples. Both test suites run against these files.
+
+## 2. Built-in themes
+- **Material You** (`builtin:dynamic`, default = today's behaviour): wallpaper colours on the phone; on the web (no wallpaper colours) it uses the Default palette.
+- **Light** (`builtin:light`) and **Dark** (`builtin:dark`): Commit's own palette, forced light / forced dark.
+- Imported themes follow the system light/dark setting using their two colour sets.
+- `settings.active_theme_id`: built-in id, an imported theme's id, or null (= Material You). It lives in the synced settings row, so phone and web use the same theme.
+
+## 3. Android
+- `domain/theme/ThemeSpec.kt`: data classes + `ThemeParser.parse(json): Result<ThemeSpec>` with validation and default filling (kotlinx.serialization `JsonElement`, so messages can name the field). Unit tests: valid/invalid/partial/fill-from-default, built-ins, the example files.
+- `data/repo/ThemeRepository.kt`: `observeThemes()`, `observeActive(): Flow<ActiveTheme>` (settings + themes → built-in or parsed spec, falling back to Material You if the theme was deleted or no longer parses), `import(json)` (validate → insert `themes` row, dirty), `importFromUrl(url)` (https only, 32 KB cap, 10 s timeout), `select(id)`, `delete(id)` (soft; if active, fall back to Material You). Writes go through the change listener, so they sync, and the widget redraws.
+- `ui/theme/Theme.kt`: `CommitTheme(active)` builds the Material 3 `ColorScheme` from the spec (or dynamic / forced light / dark), `Shapes` from the radius, and `Typography` with the font family (`serif` → Serif, `mono` → Monospace, `rounded` → bundled **Nunito** variable font in `res/font`, OFL-licensed). `MainActivity` and `QuickAddActivity` collect `observeActive()`.
+- **Settings → Theme** screen (`ui/settings/ThemeScreen.kt`, F9.3): cards for each built-in and imported theme with a live preview (primary button, card, checkbox, chip, text samples in that theme's colours, radius and font), tap to apply, delete imported ones; **Import from file** (Storage Access Framework, `application/json`) and **Import from link** (URL field); validation errors shown in plain words.
+- **Widget**: `CommitWidget` collects the active theme; `GlanceTheme(colors = ColorProviders(light, dark))` built from the spec (Material You = `GlanceTheme.colors` dynamic default; Light/Dark = the same scheme for both). Theme changes redraw all widgets.
+
+## 4. Web
+- `web/lib/domain/theme.ts`: port of the parser/validation/defaults with the same tests (Vitest, same example files).
+- `web/components/ThemeProvider.tsx`: reads `settings.active_theme_id` + `themes` (React Query, with Realtime already live), writes CSS variables for light and dark (a `<style>` with `:root` + `@media (prefers-color-scheme: dark)`, or one forced set), mapping the spec onto the existing tokens (`--bg`, `--surface`, `--surface-2/3`, `--line`, `--fg`, `--fg-muted`, `--primary`, `--primary-soft`, `--on-primary`, `--danger`) plus new `--radius` and `--font`. Components switch their fixed `rounded-*` classes to the radius variable; Nunito is loaded via `next/font` for `rounded`.
+- `web/lib/domain/types.ts`: add `Theme` / `themes` to the cached tables (and Realtime).
+- **Settings → Theme** section: same list with previews, apply, delete, import from file (`<input type=file>`) or link (fetch; works for links that allow cross-origin reads, such as raw GitHub/Gist and our own `/themes/*.json`).
+- `web/public/themes/`: copies of the example themes.
+
+## Critical files
+- New: `themes/README.md`, `themes/theme.schema.json`, `themes/examples/*.json`; app `domain/theme/ThemeSpec.kt`, `data/repo/ThemeRepository.kt`, `ui/settings/ThemeScreen.kt`, `res/font/nunito.ttf` + test; web `lib/domain/theme.ts` + test, `components/ThemeProvider.tsx`, `public/themes/*.json`
+- Modified: app `ui/theme/Theme.kt` (+ drop template `Color.kt`), `MainActivity.kt`, `quickadd/QuickAddActivity.kt`, `widget/CommitWidget.kt`, `ui/settings/SettingsScreen.kt`, `ui/Routes.kt`, `AppContainer.kt`, `data/db/dao/LaterDaos.kt` (ThemeDao queries); web `app/layout.tsx`, `app/globals.css`, `components/ui.tsx` (radius), `app/settings/page.tsx`, `lib/domain/types.ts`, `lib/data/mutations.ts`
+- Docs: `app/PLAN.md`, `app/RESULTS.md`
+
+## Verification
+1. Unit tests: Kotlin `ThemeParserTest` and web `theme.test.ts` pass on the same cases and example files (valid, partial fill, invalid messages, size limit, built-ins). Existing suites still pass; `assembleDebug`, web `typecheck` / `lint` / `build` clean.
+2. Instrumented: `ThemeRepository` import → row saved dirty; select → `settings.active_theme_id`; delete active → falls back to Material You.
+3. Emulator: import Ocean by link (`https://commit.yxuan.dev/themes/ocean.json`) → preview → apply → app, quick-add popup and widget switch to Ocean; Light / Dark force the mode; Material You restores wallpaper colours; a broken JSON shows clear errors and changes nothing.
+4. Cross-device: apply a theme on the phone → the web (commit.yxuan.dev) switches within seconds (Realtime) with the same colours, radius and font; apply on the web → the phone switches after its next sync (push, about a second).
+5. Deploy the web (`npm run deploy`); append M9 to `app/PLAN.md` and results to `app/RESULTS.md`.
+
+
+---
+
+# Plan: Commit — M10 (Calendar Recurrence, Snooze & Local Data Retention)
+
+## Context
+Following the completion of M9 (Themes), M10 addresses the remaining core and reliability requirements from the PRD:
+1. **Calendar Recurrence (F4.3 - P2)**: Recurrence based on specific days of the week (e.g. Mon, Wed, Fri) via weekday bitmask alongside the existing interval-based recurrence (every N days). Chores carry forward until done if missed.
+2. **Reminder Snooze & Lead Time (F7.1, F7.4 - P1)**: Configurable reminder lead time (At due time, 15m, 30m, 1h before) and a "Snooze 1h" action directly from the reminder notification.
+3. **12-Month Local Data Retention Policy (PRD Non-Functional Requirement)**: The phone keeps 12 months of completion and workout history to bound local storage usage while the full history remains in Supabase. Only clean rows (`dirty = 0`) are purged locally so sync deletion mutations are never generated.
+
+## Scope & Implementation
+
+### 1. Database & Migrations
+- Android Room bumped from version 5 to 6 (`AutoMigration(from = 5, to = 6)` in `AppDatabase.kt`). Added `recur_days: Int? = null` and `reminder_lead_minutes: Int? = null` to `TodoEntity`.
+- Exported Room schema `6.json`.
+- Prune queries added to `CompletionDao` (`pruneOld`), `WorkoutSessionDao` (`pruneOld`), and `WorkoutSetDao` (`pruneOrphaned`).
+- Supabase SQL migration: `supabase/migrations/0004_calendar_recurrence_and_lead_time.sql` adding `recur_days` and `reminder_lead_minutes` to `todos`.
+
+### 2. Domain & Data Layers
+- `domain/Recurrence.kt`: support calendar recurrence bitmask alongside interval recurrence:
+  - `isRecurring`: checks interval > 0 or recurDays > 0.
+  - `nextDueDate`: evaluates next matching weekday strictly after `lastDoneAt` (or search from initial start/due date if never done, carrying forward).
+  - `nextMatchingDay`: iterates forward to find the next active weekday bit.
+  - `label`: formatted as "Mon · Wed · Fri" or "every N days".
+- `domain/RetentionManager.kt`:
+  - `cutoffMillis`: start-of-day timestamp 365 days ago.
+  - `purgeLocalHistory`: deletes synced (`dirty = 0`) completions and workout sessions older than cutoff.
+- `data/repo/TodoRepository.kt`: updated `add`, `update`, and added `purgeOldHistory`.
+
+### 3. Notifications & Alarms
+- `alarm/AlarmScheduler.kt`:
+  - `rescheduleTodos`: schedules `TODO_DUE` at `todo.dueAt - (todo.reminderLeadMinutes ?: 0) * 60_000L`.
+  - `snoozeTodo`: re-schedules `TODO_DUE` alarm for 1 hour into the future.
+- `notify/Notifications.kt`: adds "Snooze 1h" action button to `todoReminder()`.
+- `notify/NotificationActionReceiver.kt`: handles `ACTION_TODO_SNOOZE` calling `alarmScheduler.snoozeTodo`.
+- `alarm/Receivers.kt`: uses `Recurrence.label(todo)` in reminder alarms.
+
+### 4. UI (Android & Web)
+- Android Compose:
+  - `ui/todos/TodoForm.kt`: recurrence mode switcher (Interval vs Specific weekdays with 7 DayOfWeek FilterChips) and reminder lead time chips (At due time, 15m, 30m, 1h).
+  - `TodoEditorViewModel.kt`, `TodoEditorScreen.kt`, `QuickAddActivity.kt`: wired to store and edit `recurDays` and `reminderLeadMinutes`.
+- Web App (`web/`):
+  - `web/lib/domain/recurrence.ts`: updated with `recur_days`, `nextMatchingDay`, `weekdaysLabel`, `recurrenceLabel`.
+  - `web/components/TodoForm.tsx`: recurrence mode select, Mon..Sun toggle buttons, reminder alert lead select.
+  - `web/components/TodosView.tsx`: displays `recurrenceLabel(todo)`.
+
+### 5. Verification
+- Android Unit Tests: 51/51 pass (`:app:testDebugUnitTest`).
+- Android Build: `:app:assembleDebug` succeeds with Room 6 schema.
+- Web Unit Tests: 31/31 pass (`npm test`).
+- Web Typecheck & Lint: clean (`npm run typecheck`, `npm run lint`).
+- Web Build: static export succeeded.
+- Web Deploy: Cloudflare Pages deployment completed.

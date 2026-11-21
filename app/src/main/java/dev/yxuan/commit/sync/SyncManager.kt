@@ -1,9 +1,11 @@
 package dev.yxuan.commit.sync
 
 import android.content.Context
+import android.util.Log
 import dev.yxuan.commit.BuildConfig
 import dev.yxuan.commit.data.db.AppDatabase
 import dev.yxuan.commit.data.repo.SettingsRepository
+import dev.yxuan.commit.domain.RetentionManager
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.auth.auth
@@ -144,6 +146,7 @@ class SyncManager(
                 prefs.edit().putLong(KEY_LAST_SYNC, now).apply()
                 _state.update { it.copy(syncing = false, lastSyncedAt = now, pending = engine.pendingCount(), error = null) }
                 if (result.pulled > 0) onRemoteChange()
+                purgeOldHistoryDaily(now)
             } catch (e: Exception) {
                 _state.update { it.copy(syncing = false, pending = runCatching { engine.pendingCount() }.getOrDefault(it.pending), error = e.message ?: e::class.simpleName) }
                 throw e
@@ -152,6 +155,20 @@ class SyncManager(
     }
 
     /** Stores this device's FCM token so the Edge Function can wake it after web edits. */
+    /**
+     * 12-month local retention (PRD NF), at most once a day, after a successful sync and inside the
+     * sync lock: only rows that have reached the server are removed, and no pull is half-applied.
+     */
+    private suspend fun purgeOldHistoryDaily(now: Long) {
+        if (now - prefs.getLong(KEY_LAST_PURGE, 0) < 24 * 60 * 60 * 1000L) return
+        runCatching { RetentionManager.purgeLocalHistory(db, java.time.Clock.systemDefaultZone()) }
+            .onSuccess { pruned ->
+                prefs.edit().putLong(KEY_LAST_PURGE, now).apply()
+                if (pruned > 0) Log.i("CommitSync", "Retention: removed $pruned local history rows older than 12 months")
+            }
+            .onFailure { Log.w("CommitSync", "Retention purge failed", it) }
+    }
+
     suspend fun registerPushToken(token: String) {
         val client = supabase ?: return
         if (client.auth.currentSessionOrNull() == null) {
@@ -185,6 +202,7 @@ class SyncManager(
     private companion object {
         const val KEY_PENDING_TOKEN = "pending_push_token"
         const val KEY_LAST_SYNC = "last_sync"
+        const val KEY_LAST_PURGE = "last_retention_purge"
     }
 }
 

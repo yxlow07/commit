@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { localDate } from "./dates";
 import { formatDue } from "./due";
-import { effectiveDue, isDone, isRecurring, nextDueDay, openItems } from "./recurrence";
+import { effectiveDue, isDone, isRecurring, nextDueDay, nextMatchingDay, openItems, recurrenceLabel } from "./recurrence";
 import { commitmentStats, lateness, perDay, progress, type CompletionRow, type ExercisePoint } from "./stats";
 import { cssColor, formatVolume, formatWeight, hasWeekday, toggleWeekday, weekdayBit, weekdaysLabel } from "./format";
 import type { Todo } from "./types";
@@ -37,7 +37,8 @@ describe("formatDue (DueFormatterTest)", () => {
 function chore(interval: number | null, opts: Partial<Todo> = {}): Todo {
   return {
     id: "t", user_id: "u", updated_at: 0, deleted: 0, commitment_id: "c", title: "Laundry",
-    due_at: null, has_time: 0, done_at: null, recur_interval_days: interval, last_done_at: null, ...opts,
+    due_at: null, has_time: 0, done_at: null, recur_interval_days: interval,
+    recur_days: null, reminder_lead_minutes: null, last_done_at: null, ...opts,
   };
 }
 
@@ -81,6 +82,42 @@ describe("recurrence (RecurrenceTest)", () => {
     ];
     expect(openItems(todos, now).map((i) => i.todo.id)).toEqual(["due", "tomorrow", "undated"]);
   });
+  it("calendar recurrence next matching day and carries forward when missed", () => {
+    const mwf = 21; // Mon (1) + Wed (4) + Fri (16)
+    const mon = at(2026, 11, 23); // Monday
+    expect(nextMatchingDay(mwf, mon)).toBe(mon);
+    expect(nextMatchingDay(mwf, at(2026, 11, 24))).toBe(at(2026, 11, 25)); // Tue -> Wed
+
+    const todo = chore(null, { recur_days: mwf, last_done_at: at(2026, 11, 23, 21) });
+    expect(nextDueDay(todo, at(2026, 11, 23))).toBe(at(2026, 11, 25));
+    expect(isDone(todo, at(2026, 11, 24, 18))).toBe(true);
+    expect(isDone(todo, at(2026, 11, 25, 1))).toBe(false);
+
+    // Carries forward on Thursday
+    const thu = at(2026, 11, 26, 10);
+    expect(isDone(todo, thu)).toBe(false);
+    expect(effectiveDue(todo, thu).dueAt).toBe(at(2026, 11, 25));
+  });
+  it("never-done calendar chore: first matching day on or after its due date, overdue when missed", () => {
+    const mwf = 21;
+    // Due Tue 24 Nov 18:00 (not a matching day) -> due Wed 25 Nov, no time.
+    const tue = chore(null, { recur_days: mwf, due_at: at(2026, 11, 24, 18), has_time: 1 });
+    expect(effectiveDue(tue, at(2026, 11, 24, 9))).toEqual({ dueAt: at(2026, 11, 25), hasTime: false });
+    // Due Mon 23 Nov 18:00 (a matching day) -> keeps the time.
+    const mon = chore(null, { recur_days: mwf, due_at: at(2026, 11, 23, 18), has_time: 1 });
+    expect(effectiveDue(mon, at(2026, 11, 23, 9))).toEqual({ dueAt: at(2026, 11, 23, 18), hasTime: true });
+    // Still not done on Thursday: stays due Monday (overdue), not moved to today.
+    expect(nextDueDay(mon, at(2026, 11, 26, 10))).toBe(at(2026, 11, 23));
+    expect(isDone(mon, at(2026, 11, 26, 10))).toBe(false);
+    // No due date -> today's or the next matching day.
+    expect(nextDueDay(chore(null, { recur_days: mwf }), at(2026, 11, 24, 10))).toBe(at(2026, 11, 25));
+  });
+  it("recurrence label supports interval and calendar", () => {
+    expect(recurrenceLabel(chore(3))).toBe("every 3 days");
+    expect(recurrenceLabel(chore(1))).toBe("every day");
+    expect(recurrenceLabel(chore(null, { recur_days: 21 }))).toBe("Mon · Wed · Fri");
+    expect(weekdaysLabel(21)).toBe("Mon · Wed · Fri");
+  });
 });
 
 function row(id: string, todo: string, done: number, extra: Partial<CompletionRow> = {}): CompletionRow {
@@ -110,6 +147,15 @@ describe("stats (StatsTest)", () => {
     expect(s.choreStreaks).toEqual([["Laundry", 1]]);
     expect(s.doneThisWeek).toBe(3);
     expect([s.onTime, s.late]).toEqual([2, 1]);
+  });
+  it("weekday chore lateness uses the next matching day", () => {
+    // Mon + Thu (mask 9), first due Mon 9 Nov: done Tue 10th (late), Thu 12th, Mon 16th, Thu 19th (on time).
+    const rows = [10, 12, 16, 19].map((d, i) => row(`w${i}`, "Bins", noon(d), { commitmentId: "home", commitmentName: "Home", dueAt: at(2026, 11, 9), recurDays: 9 }));
+    const late = lateness(rows);
+    expect(rows.map((r) => late.get(r.completionId) ?? false)).toEqual([true, false, false, false]);
+    const s = commitmentStats(rows, now)[0];
+    expect(s.choreStreaks).toEqual([["Bins", 3]]);
+    expect([s.onTime, s.late]).toEqual([3, 1]);
   });
   it("this week counts from Monday", () => {
     const rows = [15, 16, 19, 21].map((d, i) => row(`r${i}`, `Read ${i}`, noon(d)));

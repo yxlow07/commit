@@ -45,13 +45,14 @@ import kotlinx.coroutines.Dispatchers
         SettingsEntity::class,
         ActiveWorkoutEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2), // M4: phone-only active_workout table
         AutoMigration(from = 2, to = 3), // M5: routines.planned_days
         AutoMigration(from = 3, to = 4, spec = DropDirtyColumns::class), // M7 (PowerSync, later removed)
         AutoMigration(from = 4, to = 5), // M7: hand-written sync, `dirty` back (default 1 = upload everything)
+        AutoMigration(from = 5, to = 6), // M10: todos.recur_days, todos.reminder_lead_minutes
     ],
 )
 @ColumnTypeConverters(Converters::class)

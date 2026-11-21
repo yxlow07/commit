@@ -68,10 +68,16 @@ class AppContainer(context: Context) {
 
     val settingsRepository by lazy {
         SettingsRepository(database, clock) {
-            // Recap and chore reminder times live in settings.
+            // Recap and chore reminder times (and the theme) live in settings; upload right away.
             alarmScheduler.rescheduleTodos()
             alarmScheduler.scheduleRecaps()
+            widgetUpdater.refresh()
+            syncManager.requestSync()
         }
+    }
+
+    val themeRepository by lazy {
+        dev.yxuan.commit.data.repo.ThemeRepository(database, clock, settingsRepository, changeListener)
     }
 
     val recapRepository by lazy { RecapRepository(database, clock) }
@@ -79,7 +85,10 @@ class AppContainer(context: Context) {
     val historyRepository by lazy { HistoryRepository(database, clock, changeListener) }
 
     val routineRepository by lazy {
-        RoutineRepository(database, clock) { widgetUpdater.refresh() }
+        RoutineRepository(database, clock) {
+            widgetUpdater.refresh()
+            syncManager.requestSync() // routine/exercise edits upload right away too
+        }
     }
 
     private val workoutEffects = object : WorkoutEffects {

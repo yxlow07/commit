@@ -82,4 +82,68 @@ class RecurrenceTest {
         val open = TodoItem.open(listOf(undated, tomorrow, doneChore, dueChore), clock).map { it.todo.id }
         assertEquals(listOf("due", "tomorrow", "undated"), open)
     }
+
+    @Test
+    fun calendarRecurrenceNextMatchingDay() {
+        // Mon (1) + Wed (4) + Fri (16) = 21
+        val mwf = 21
+        val mon = LocalDate.of(2026, 11, 23) // Monday
+        assertEquals(mon, Recurrence.nextMatchingDay(mwf, mon))
+        assertEquals(LocalDate.of(2026, 11, 25), Recurrence.nextMatchingDay(mwf, mon.plusDays(1))) // Tue -> Wed
+        assertEquals(LocalDate.of(2026, 11, 27), Recurrence.nextMatchingDay(mwf, mon.plusDays(3))) // Thu -> Fri
+        assertEquals(LocalDate.of(2026, 11, 30), Recurrence.nextMatchingDay(mwf, mon.plusDays(5))) // Sat -> next Mon
+    }
+
+    @Test
+    fun calendarRecurrenceDoneResetsOnNextRecurrenceDay() {
+        // Mon/Wed/Fri (21). Ticked on Monday 23 Nov at 21:00 -> due Wednesday 25 Nov from midnight.
+        val todo = TodoEntity(
+            id = "t", updatedAt = 0, commitmentId = "c", title = "Trash",
+            recurDays = 21, lastDoneAt = millis(2026, 11, 23, 21, 0),
+        )
+        assertEquals(LocalDate.of(2026, 11, 25), Recurrence.nextDueDate(todo, zone, LocalDate.of(2026, 11, 23)))
+        assertTrue(Recurrence.isDone(todo, clockAt(2026, 11, 24, 18, 0))) // Tuesday: done
+        assertFalse(Recurrence.isDone(todo, clockAt(2026, 11, 25, 0, 1))) // Wednesday: due again
+    }
+
+    @Test
+    fun calendarRecurrenceCarriesForwardWhenMissed() {
+        // Due Wednesday 25 Nov. User didn't do it on Wednesday. On Thursday 26 Nov, it is still open / overdue.
+        val todo = TodoEntity(
+            id = "t", updatedAt = 0, commitmentId = "c", title = "Trash",
+            recurDays = 21, lastDoneAt = millis(2026, 11, 23, 21, 0),
+        )
+        val clock = clockAt(2026, 11, 26, 10, 0) // Thursday
+        assertFalse(Recurrence.isDone(todo, clock))
+        assertEquals(millis(2026, 11, 25), Recurrence.effectiveDue(todo, clock).first)
+    }
+
+    @Test
+    fun neverDoneCalendarChoreIsDueOnFirstMatchingDayAndOverdueWhenMissed() {
+        val mwf = 21
+        val zoneToday = LocalDate.of(2026, 11, 24)
+        // Due Tue 24 Nov 18:00 (not a matching day) -> due Wed 25 Nov, no time.
+        val tue = TodoEntity(id = "t", updatedAt = 0, commitmentId = "c", title = "Trash", recurDays = mwf,
+            dueAt = millis(2026, 11, 24, 18, 0), hasTime = true)
+        assertEquals(millis(2026, 11, 25) to false, Recurrence.effectiveDue(tue, clockAt(2026, 11, 24, 9)))
+        // Due Mon 23 Nov 18:00 (a matching day) -> keeps the time.
+        val mon = tue.copy(dueAt = millis(2026, 11, 23, 18, 0))
+        assertEquals(millis(2026, 11, 23, 18, 0) to true, Recurrence.effectiveDue(mon, clockAt(2026, 11, 23, 9)))
+        // Still not done on Thursday: stays due Monday (overdue), not moved to today.
+        assertEquals(LocalDate.of(2026, 11, 23), Recurrence.nextDueDate(mon, zone, LocalDate.of(2026, 11, 26)))
+        assertFalse(Recurrence.isDone(mon, clockAt(2026, 11, 26, 10)))
+        // No due date -> today's or the next matching day.
+        val undated = TodoEntity(id = "u", updatedAt = 0, commitmentId = "c", title = "Trash", recurDays = mwf)
+        assertEquals(LocalDate.of(2026, 11, 25), Recurrence.nextDueDate(undated, zone, zoneToday))
+    }
+
+    @Test
+    fun recurrenceLabelSupportsBothIntervalAndCalendar() {
+        val intervalChore = TodoEntity(id = "1", updatedAt = 0, commitmentId = "c", title = "A", recurIntervalDays = 3)
+        val singleDayChore = TodoEntity(id = "2", updatedAt = 0, commitmentId = "c", title = "B", recurIntervalDays = 1)
+        val calendarChore = TodoEntity(id = "3", updatedAt = 0, commitmentId = "c", title = "C", recurDays = 21) // Mon, Wed, Fri
+        assertEquals("every 3 days", Recurrence.label(intervalChore))
+        assertEquals("every day", Recurrence.label(singleDayChore))
+        assertEquals("Mon · Wed · Fri", Recurrence.label(calendarChore))
+    }
 }

@@ -46,6 +46,19 @@ class StatsTest {
     }
 
     @Test
+    fun weekdayChoreLatenessUsesNextMatchingDay() {
+        // Mon + Thu (mask 9), first due Mon 9 Nov: done Tue 10th (late), Thu 12th, Mon 16th, Thu 19th (all on time).
+        val rows = listOf(10, 12, 16, 19).mapIndexed { i, d ->
+            row("w$i", "Bins", millis(d, 12), "home", due = millis(9)).copy(recurIntervalDays = null, recurDays = 9)
+        }
+        val late = Stats.lateness(rows, zone)
+        assertEquals(listOf(true, false, false, false), rows.map { late[it.completionId] ?: false })
+        val stats = Stats.commitmentStats(rows, clock).single()
+        assertEquals(listOf("Bins" to 3), stats.choreStreaks) // next due Mon 23rd: not overdue on Sat 21st
+        assertEquals(3 to 1, stats.onTime to stats.late)
+    }
+
+    @Test
     fun thisWeekCountsFromMonday() {
         val rows = listOf(15, 16, 19, 21).mapIndexed { i, d -> row("r$i", "Read $i", millis(d)) }
         val stats = Stats.commitmentStats(rows, clock).single()

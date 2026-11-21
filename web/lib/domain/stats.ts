@@ -1,4 +1,5 @@
 import { addDays, daysBetween, startOfDay, startOfWeek } from "./dates";
+import { nextMatchingDay } from "./recurrence";
 
 /** A completion with its todo and commitment (the phone's CompletionRow). */
 export interface CompletionRow {
@@ -12,6 +13,25 @@ export interface CompletionRow {
   dueAt: number | null;
   hasTime: boolean;
   recurIntervalDays: number | null;
+  /** Weekday mask for calendar chores (M10); optional so older callers still type-check. */
+  recurDays?: number | null;
+}
+
+export function isRecurringRow(r: CompletionRow): boolean {
+  return (r.recurIntervalDays ?? 0) > 0 || (r.recurDays ?? 0) > 0;
+}
+
+/** A chore's due day after it was done on [doneDay]: + interval, or the next matching weekday (F4.2, F4.3). */
+function nextDueAfter(r: CompletionRow, doneDay: number): number {
+  const mask = r.recurDays ?? 0;
+  return mask > 0 ? nextMatchingDay(mask, addDays(doneDay, 1)) : addDays(doneDay, r.recurIntervalDays ?? 0);
+}
+
+/** Due day of a chore's first completion: its due date (the first matching weekday on or after it). */
+function firstDueDay(r: CompletionRow): number | null {
+  if (r.dueAt == null) return null;
+  const mask = r.recurDays ?? 0;
+  return mask > 0 ? nextMatchingDay(mask, startOfDay(r.dueAt)) : startOfDay(r.dueAt);
 }
 
 export interface CommitmentStats {
@@ -46,12 +66,12 @@ export function lateness(rows: CompletionRow[]): Map<string, boolean> {
   const result = new Map<string, boolean>();
   for (const done of groupBy(rows, (r) => r.todoId).values()) {
     const sorted = [...done].sort((a, b) => a.doneAt - b.doneAt);
-    const interval = sorted[0].recurIntervalDays ?? 0;
-    if (interval > 0) {
+    const first = sorted[0];
+    if (isRecurringRow(first)) {
       let previous: number | null = null;
       for (const c of sorted) {
         const day = startOfDay(c.doneAt);
-        const dueDay = previous != null ? addDays(previous, interval) : c.dueAt != null ? startOfDay(c.dueAt) : null;
+        const dueDay = previous != null ? nextDueAfter(first, previous) : firstDueDay(first);
         if (dueDay != null) result.set(c.completionId, day > dueDay);
         previous = day;
       }
@@ -72,7 +92,7 @@ export function commitmentStats(rows: CompletionRow[], now: number): CommitmentS
   const stats: CommitmentStats[] = [];
   for (const [id, list] of groupBy(rows, (r) => r.commitmentId)) {
     const streaks: [string, number][] = [];
-    for (const done of groupBy(list.filter((r) => (r.recurIntervalDays ?? 0) > 0), (r) => r.todoId).values()) {
+    for (const done of groupBy(list.filter(isRecurringRow), (r) => r.todoId).values()) {
       const s = choreStreak(done, late, today);
       if (s > 0) streaks.push([done[0].title, s]);
     }
@@ -92,9 +112,8 @@ export function commitmentStats(rows: CompletionRow[], now: number): CommitmentS
 
 function choreStreak(done: CompletionRow[], late: Map<string, boolean>, today: number): number {
   const sorted = [...done].sort((a, b) => b.doneAt - a.doneAt);
-  const interval = sorted[0].recurIntervalDays;
-  if (!interval) return 0;
-  const nextDue = addDays(startOfDay(sorted[0].doneAt), interval);
+  if (!isRecurringRow(sorted[0])) return 0;
+  const nextDue = nextDueAfter(sorted[0], startOfDay(sorted[0].doneAt));
   if (today > nextDue) return 0;
   let n = 0;
   for (const c of sorted) {

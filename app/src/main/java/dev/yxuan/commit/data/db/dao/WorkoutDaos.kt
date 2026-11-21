@@ -103,6 +103,13 @@ interface WorkoutSessionDao {
     /** All finished sessions, newest first. */
     @Query(SESSION_SUMMARY_SELECT + "AND s.ended_at IS NOT NULL ORDER BY s.started_at DESC")
     fun observeFinishedSummaries(): Flow<List<SessionSummary>>
+
+    /** Local retention: synced sessions that ended before [cutoff] and have no unsynced sets. Sets go first ([WorkoutSetDao.pruneForOldSessions]). */
+    @Query(
+        """DELETE FROM workout_sessions WHERE ended_at IS NOT NULL AND ended_at < :cutoff AND dirty = 0
+           AND NOT EXISTS (SELECT 1 FROM workout_sets ws WHERE ws.session_id = workout_sessions.id AND ws.dirty = 1)"""
+    )
+    suspend fun pruneOld(cutoff: Long): Int
 }
 
 /** A logged set with its exercise name, for the session detail screen (F8.5). */
@@ -155,6 +162,17 @@ interface WorkoutSetDao {
 
     @Query("SELECT * FROM workout_sets WHERE session_id = :sessionId AND deleted = 0 ORDER BY done_at")
     suspend fun getForSession(sessionId: String): List<WorkoutSetEntity>
+
+    /**
+     * Local retention: the sets of the sessions [WorkoutSessionDao.pruneOld] is about to delete. Picked by
+     * session (not "session missing"), so sets pulled before their session arrives are never deleted.
+     */
+    @Query(
+        """DELETE FROM workout_sets WHERE dirty = 0 AND session_id IN (
+             SELECT s.id FROM workout_sessions s WHERE s.ended_at IS NOT NULL AND s.ended_at < :cutoff AND s.dirty = 0
+             AND NOT EXISTS (SELECT 1 FROM workout_sets ws WHERE ws.session_id = s.id AND ws.dirty = 1))"""
+    )
+    suspend fun pruneForOldSessions(cutoff: Long): Int
 }
 
 /** Phone-only live workout row (id = 0). */

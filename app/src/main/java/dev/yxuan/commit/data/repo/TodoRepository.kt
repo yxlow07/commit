@@ -50,7 +50,14 @@ class TodoRepository(
 
     suspend fun get(id: String): TodoEntity? = dao.getById(id)
 
-    suspend fun add(commitmentId: String, title: String, due: Due?, recurIntervalDays: Int? = null): String {
+    suspend fun add(
+        commitmentId: String,
+        title: String,
+        due: Due?,
+        recurIntervalDays: Int? = null,
+        recurDays: Int? = null,
+        reminderLeadMinutes: Int? = null,
+    ): String {
         val id = UUID.randomUUID().toString()
         dao.upsert(
             TodoEntity(
@@ -61,14 +68,24 @@ class TodoRepository(
                 dueAt = due?.toEpochMillis(clock),
                 hasTime = due?.time != null,
                 recurIntervalDays = recurIntervalDays?.takeIf { it > 0 },
+                recurDays = recurDays?.takeIf { it > 0 },
+                reminderLeadMinutes = reminderLeadMinutes?.takeIf { it >= 0 },
             )
         )
         listener.onDataChanged()
         return id
     }
 
-    /** Edits title, due date, recurrence and commitment (moving it when the commitment changes). */
-    suspend fun update(id: String, title: String, commitmentId: String, due: Due?, recurIntervalDays: Int? = null) {
+    /** Edits title, due date, recurrence, reminder lead time and commitment (moving it when the commitment changes). */
+    suspend fun update(
+        id: String,
+        title: String,
+        commitmentId: String,
+        due: Due?,
+        recurIntervalDays: Int? = null,
+        recurDays: Int? = null,
+        reminderLeadMinutes: Int? = null,
+    ) {
         val current = dao.getById(id) ?: return
         dao.upsert(
             current.copy(
@@ -77,6 +94,8 @@ class TodoRepository(
                 dueAt = due?.toEpochMillis(clock),
                 hasTime = due?.time != null,
                 recurIntervalDays = recurIntervalDays?.takeIf { it > 0 },
+                recurDays = recurDays?.takeIf { it > 0 },
+                reminderLeadMinutes = reminderLeadMinutes?.takeIf { it >= 0 },
                 updatedAt = clock.millis(), dirty = true,
             )
         )

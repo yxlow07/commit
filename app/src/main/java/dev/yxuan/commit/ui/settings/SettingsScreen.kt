@@ -8,6 +8,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -35,15 +36,23 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.yxuan.commit.data.db.entity.SettingsEntity
 import dev.yxuan.commit.data.repo.SettingsRepository
+import dev.yxuan.commit.data.repo.ThemeRepository
+import dev.yxuan.commit.domain.theme.ActiveTheme
 import dev.yxuan.commit.ui.AppViewModelFactory
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
+class SettingsViewModel(
+    private val repo: SettingsRepository,
+    themeRepo: ThemeRepository,
+) : ViewModel() {
     val settings: StateFlow<SettingsEntity?> =
         repo.observe().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val activeTheme: StateFlow<ActiveTheme> =
+        themeRepo.observeActive().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ActiveTheme.Dynamic)
 
     fun update(change: (SettingsEntity) -> SettingsEntity) {
         viewModelScope.launch { repo.update(change) }
@@ -55,10 +64,12 @@ class SettingsViewModel(private val repo: SettingsRepository) : ViewModel() {
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
+    onOpenTheme: () -> Unit = {},
     accountSection: @Composable () -> Unit = {},
     viewModel: SettingsViewModel = viewModel(factory = AppViewModelFactory),
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val activeTheme by viewModel.activeTheme.collectAsStateWithLifecycle()
     var editing by rememberSaveable { mutableStateOf<String?>(null) }
 
     Scaffold(
@@ -95,6 +106,18 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            SectionTitle("Appearance")
+            val themeName = when (val t = activeTheme) {
+                is ActiveTheme.Dynamic -> "Material You"
+                is ActiveTheme.Fixed -> t.spec.name
+            }
+            ListItem(
+                modifier = Modifier.clickable(onClick = onOpenTheme),
+                headlineContent = { Text("Theme") },
+                supportingContent = { Text(themeName) },
+                trailingContent = { Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null) },
             )
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             accountSection()

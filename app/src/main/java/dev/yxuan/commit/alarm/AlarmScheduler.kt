@@ -26,6 +26,7 @@ class AlarmScheduler(
     private val clock: Clock,
 ) {
     private val alarms = context.getSystemService(AlarmManager::class.java)
+    private val snoozes = SnoozeStore(context)
 
     /** Cancels and re-sets due reminders and chore alarms for every todo (PRD "Alarm scheduling"). */
     suspend fun rescheduleTodos() {
@@ -34,7 +35,9 @@ class AlarmScheduler(
         val choreTime = LocalTime.ofSecondOfDay(
             ((db.settingsDao().get()?.morningRecapTime ?: DEFAULT_MORNING) * 60L).coerceIn(0, 86_399)
         )
-        for (todo in db.todoDao().getAll()) {
+        val todos = db.todoDao().getAll()
+        (snoozes.ids() - todos.mapTo(HashSet()) { it.id }).forEach(snoozes::remove)
+        for (todo in todos) {
             cancel(AlarmKind.TODO_DUE, todo.id)
             cancel(AlarmKind.CHORE_DUE, todo.id)
             if (todo.deleted) continue
@@ -43,11 +46,36 @@ class AlarmScheduler(
                 val next = Recurrence.nextDueDate(todo, clock.zone, today) ?: continue
                 val at = next.atTime(choreTime).atZone(clock.zone).toInstant().toEpochMilli()
                 if (at > now) setExact(AlarmKind.CHORE_DUE, todo.id, at)
-            } else if (todo.hasTime && todo.doneAt == null && todo.dueAt != null && todo.dueAt > now) {
-                setExact(AlarmKind.TODO_DUE, todo.id, todo.dueAt) // F7.1; date-only todos go to the morning recap
+            } else if (todo.hasTime && todo.doneAt == null && todo.dueAt != null) {
+                // A live snooze (same due time as when snoozed) replaces the regular reminder (F7.4).
+                val snooze = snoozes.get(todo.id)?.takeIf { it.dueAt == todo.dueAt && it.until > now }
+                if (snooze == null) snoozes.remove(todo.id)
+                val leadMs = (todo.reminderLeadMinutes ?: 0) * 60_000L
+                val triggerAt = snooze?.until ?: (todo.dueAt - leadMs)
+                if (triggerAt > now) {
+                    setExact(AlarmKind.TODO_DUE, todo.id, triggerAt) // F7.1; date-only todos go to the morning recap
+                }
+            } else {
+                snoozes.remove(todo.id)
             }
         }
     }
+
+    /**
+     * Snoozes a todo reminder for [durationMs] (default 1 hour, F7.4). Stored in [SnoozeStore] so
+     * later reschedules (changes, syncs, boot) keep it.
+     */
+    suspend fun snoozeTodo(todoId: String, durationMs: Long = 3600_000L) {
+        val todo = db.todoDao().getById(todoId) ?: return
+        val dueAt = todo.dueAt ?: return
+        if (todo.deleted || todo.doneAt != null) return
+        val at = clock.millis() + durationMs
+        snoozes.put(todoId, SnoozeStore.Snooze(until = at, dueAt = dueAt))
+        setExact(AlarmKind.TODO_DUE, todoId, at)
+    }
+
+    /** Called when a todo reminder fires: a snooze is used up once it has rung. */
+    fun clearSnooze(todoId: String) = snoozes.remove(todoId)
 
     /**
      * Next morning and night recaps at the times in settings (F6.1, F6.2). Re-armed after each one

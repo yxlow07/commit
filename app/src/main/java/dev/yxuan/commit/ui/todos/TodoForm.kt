@@ -26,8 +26,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -52,14 +54,18 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import dev.yxuan.commit.data.db.entity.CommitmentEntity
 import dev.yxuan.commit.data.repo.Due
+import dev.yxuan.commit.domain.Weekdays
 import dev.yxuan.commit.ui.format.DueFormatter
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
+import java.util.Locale
 
-/** Title, commitment and due fields; shared by the todo editor and the widget quick-add popup. */
+/** Title, commitment, due and recurrence fields; shared by the todo editor and the widget quick-add popup. */
 @Composable
 fun TodoForm(
     title: String,
@@ -71,6 +77,10 @@ fun TodoForm(
     onDueChange: (Due?) -> Unit,
     repeatDays: Int?,
     onRepeatChange: (Int?) -> Unit,
+    recurDays: Int? = null,
+    onRecurDaysChange: (Int?) -> Unit = {},
+    reminderLeadMinutes: Int? = null,
+    onReminderLeadChange: (Int?) -> Unit = {},
     modifier: Modifier = Modifier,
     titleFocusRequester: FocusRequester? = null,
     onDone: (() -> Unit)? = null,
@@ -91,35 +101,104 @@ fun TodoForm(
                 .let { if (titleFocusRequester != null) it.focusRequester(titleFocusRequester) else it },
         )
         CommitmentDropdown(commitments, commitmentId, onCommitmentChange)
-        DueFields(due, onDueChange)
-        RepeatField(repeatDays, onRepeatChange)
+        DueFields(due, onDueChange, reminderLeadMinutes, onReminderLeadChange)
+        RepeatField(repeatDays, onRepeatChange, recurDays, onRecurDaysChange)
     }
 }
 
-/** "Repeat every N days" (F4.1, F4.2). Off = one-off todo. */
+/** "Repeat every N days" (F4.1, F4.2) or calendar weekdays (F4.3). Off = one-off todo. */
 @Composable
-private fun RepeatField(repeatDays: Int?, onChange: (Int?) -> Unit) {
-    var text by rememberSaveable { mutableStateOf(repeatDays?.toString() ?: "7") }
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Switch(
-            checked = repeatDays != null,
-            onCheckedChange = { on -> onChange(if (on) text.toIntOrNull()?.coerceAtLeast(1) ?: 1 else null) },
-        )
-        if (repeatDays == null) {
-            Text("Repeat")
-        } else {
-            Text("Every")
-            OutlinedTextField(
-                value = text,
-                onValueChange = { value ->
-                    text = value.filter(Char::isDigit).take(3)
-                    onChange(text.toIntOrNull()?.coerceAtLeast(1) ?: 1)
+private fun RepeatField(
+    repeatDays: Int?,
+    onRepeatChange: (Int?) -> Unit,
+    recurDays: Int?,
+    onRecurDaysChange: (Int?) -> Unit,
+) {
+    val isRepeating = repeatDays != null || (recurDays != null && recurDays > 0)
+    var text by rememberSaveable { mutableStateOf((repeatDays ?: 7).toString()) }
+    var mode by rememberSaveable {
+        mutableStateOf(if (recurDays != null && recurDays > 0) "weekdays" else "interval")
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Switch(
+                checked = isRepeating,
+                onCheckedChange = { on ->
+                    if (!on) {
+                        onRepeatChange(null)
+                        onRecurDaysChange(null)
+                    } else {
+                        if (mode == "weekdays") {
+                            onRepeatChange(null)
+                            onRecurDaysChange(recurDays?.takeIf { it > 0 } ?: 1)
+                        } else {
+                            onRecurDaysChange(null)
+                            onRepeatChange(text.toIntOrNull()?.coerceAtLeast(1) ?: 1)
+                        }
+                    }
                 },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.width(80.dp),
             )
-            Text(if (repeatDays == 1) "day" else "days")
+            Text(if (isRepeating) "Repeating chore" else "Repeat")
+        }
+
+        if (isRepeating) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = mode == "interval",
+                    onClick = {
+                        mode = "interval"
+                        onRecurDaysChange(null)
+                        onRepeatChange(text.toIntOrNull()?.coerceAtLeast(1) ?: 1)
+                    },
+                    label = { Text("Every N days") },
+                )
+                FilterChip(
+                    selected = mode == "weekdays",
+                    onClick = {
+                        mode = "weekdays"
+                        onRepeatChange(null)
+                        onRecurDaysChange(recurDays?.takeIf { it > 0 } ?: 1)
+                    },
+                    label = { Text("Specific weekdays") },
+                )
+            }
+
+            if (mode == "interval") {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Every")
+                    OutlinedTextField(
+                        value = text,
+                        onValueChange = { value ->
+                            text = value.filter(Char::isDigit).take(3)
+                            onRepeatChange(text.toIntOrNull()?.coerceAtLeast(1) ?: 1)
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.width(80.dp),
+                    )
+                    Text(if ((repeatDays ?: 1) == 1) "day" else "days")
+                }
+            } else {
+                val mask = recurDays ?: 0
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("On days", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
+                        DayOfWeek.entries.forEach { day ->
+                            FilterChip(
+                                selected = Weekdays.contains(mask, day),
+                                onClick = {
+                                    // Keep at least one day: unselecting the last one does nothing.
+                                    val next = Weekdays.toggle(mask, day)
+                                    if (next > 0) onRecurDaysChange(next)
+                                },
+                                label = { Text(day.getDisplayName(TextStyle.NARROW, Locale.getDefault())) },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -165,31 +244,67 @@ fun ColorDot(color: Int, modifier: Modifier = Modifier) {
     Box(modifier.size(12.dp).background(Color(color), CircleShape))
 }
 
-/** Optional date, then optional time once a date is set (F2.1). */
+/** Optional date, then optional time once a date is set (F2.1), and optional reminder lead time (F7.1). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DueFields(due: Due?, onChange: (Due?) -> Unit) {
+private fun DueFields(
+    due: Due?,
+    onChange: (Due?) -> Unit,
+    reminderLeadMinutes: Int?,
+    onReminderLeadChange: (Int?) -> Unit,
+) {
     var showDate by remember { mutableStateOf(false) }
     var showTime by remember { mutableStateOf(false) }
 
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.Center,
-    ) {
-        AssistChip(
-            onClick = { showDate = true },
-            label = { Text(due?.let { DueFormatter.formatDate(it.date) } ?: "Add date") },
-            leadingIcon = { Icon(Icons.Default.CalendarToday, null, Modifier.size(AssistChipDefaults.IconSize)) },
-        )
-        if (due != null) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.Center,
+        ) {
             AssistChip(
-                onClick = { showTime = true },
-                label = { Text(due.time?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "Add time") },
-                leadingIcon = { Icon(Icons.Default.Schedule, null, Modifier.size(AssistChipDefaults.IconSize)) },
+                onClick = { showDate = true },
+                label = { Text(due?.let { DueFormatter.formatDate(it.date) } ?: "Add date") },
+                leadingIcon = { Icon(Icons.Default.CalendarToday, null, Modifier.size(AssistChipDefaults.IconSize)) },
             )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { onChange(if (due.time != null) due.copy(time = null) else null) }) {
-                    Icon(Icons.Default.Close, contentDescription = if (due.time != null) "Clear time" else "Clear date")
+            if (due != null) {
+                AssistChip(
+                    onClick = { showTime = true },
+                    label = { Text(due.time?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "Add time") },
+                    leadingIcon = { Icon(Icons.Default.Schedule, null, Modifier.size(AssistChipDefaults.IconSize)) },
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = {
+                        if (due.time != null) {
+                            onChange(due.copy(time = null))
+                            onReminderLeadChange(null)
+                        } else {
+                            onChange(null)
+                            onReminderLeadChange(null)
+                        }
+                    }) {
+                        Icon(Icons.Default.Close, contentDescription = if (due.time != null) "Clear time" else "Clear date")
+                    }
+                }
+            }
+        }
+
+        if (due?.time != null) {
+            val lead = reminderLeadMinutes ?: 0
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Reminder alert", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        0 to "At due time",
+                        15 to "15m before",
+                        30 to "30m before",
+                        60 to "1h before",
+                    ).forEach { (minutes, label) ->
+                        FilterChip(
+                            selected = lead == minutes,
+                            onClick = { onReminderLeadChange(if (minutes == 0) null else minutes) },
+                            label = { Text(label) },
+                        )
+                    }
                 }
             }
         }

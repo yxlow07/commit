@@ -74,6 +74,10 @@ fun TodoEditorScreen(
                 onDueChange = viewModel::setDue,
                 repeatDays = state.repeatDays,
                 onRepeatChange = viewModel::setRepeat,
+                recurDays = state.recurDays,
+                onRecurDaysChange = viewModel::setRecurDays,
+                reminderLeadMinutes = state.reminderLeadMinutes,
+                onReminderLeadChange = viewModel::setReminderLead,
                 titleFocusRequester = focus,
                 onDone = viewModel::save,
             )

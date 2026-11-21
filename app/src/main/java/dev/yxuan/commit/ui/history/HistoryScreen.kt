@@ -161,7 +161,7 @@ private fun TasksTab(rows: List<CompletionRow>, clock: Clock) {
                     headlineContent = { Text(r.title) },
                     supportingContent = {
                         val time = Instant.ofEpochMilli(r.doneAt).atZone(zone).format(DateTimeFormatter.ofPattern("HH:mm"))
-                        Text(listOfNotNull(r.commitmentName, time, if ((r.recurIntervalDays ?: 0) > 0) "chore" else null).joinToString(" · "))
+                        Text(listOfNotNull(r.commitmentName, time, if (r.isRecurring) "chore" else null).joinToString(" · "))
                     },
                 )
             }

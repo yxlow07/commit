@@ -8,6 +8,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Session, User } from "@supabase/supabase-js";
 import { isConfigured, supabase } from "@/lib/data/supabase";
 import { useRealtime } from "@/lib/data/realtime";
+import { ThemeProvider } from "./ThemeProvider";
 import { Button } from "./ui";
 
 const UserContext = createContext<User | null>(null);
@@ -36,7 +37,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <UserContext value={session.user}>
-        <SignedIn userId={session.user.id}>{children}</SignedIn>
+        <ThemeProvider>
+          <SignedIn userId={session.user.id}>{children}</SignedIn>
+        </ThemeProvider>
       </UserContext>
     </QueryClientProvider>
   );

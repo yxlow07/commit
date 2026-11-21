@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useTable } from "@/lib/data/store";
 import { completionRows, exercisePoints, sessionSummaries } from "@/lib/data/history";
-import { commitmentStats, perDay, progress, type CompletionRow } from "@/lib/domain/stats";
+import { commitmentStats, isRecurringRow, perDay, progress, type CompletionRow } from "@/lib/domain/stats";
 import { addDays, startOfDay, startOfWeek } from "@/lib/domain/dates";
 import { durationMinutes, formatVolume, formatWeight } from "@/lib/domain/format";
 import { Card, Chip, ColorDot, Empty, ErrorText, Spinner, useNow } from "@/components/ui";
@@ -128,7 +128,7 @@ function Timeline({ rows, now }: { rows: CompletionRow[]; now: number }) {
               <li key={r.completionId} className="flex items-center gap-3 px-4 py-2.5">
                 <ColorDot color={r.commitmentColor} />
                 <span className="min-w-0 flex-1 truncate">{r.title}</span>
-                <span className="text-xs text-fg-muted">{r.commitmentName} · {timeFmt.format(r.doneAt)}{r.recurIntervalDays ? " · chore" : ""}</span>
+                <span className="text-xs text-fg-muted">{r.commitmentName} · {timeFmt.format(r.doneAt)}{isRecurringRow(r) ? " · chore" : ""}</span>
               </li>
             ))}
           </ul>

@@ -14,7 +14,7 @@ export function completionRows(completions: Completion[], todos: Todo[], commitm
     if (!t || !m) continue;
     rows.push({
       completionId: c.id, todoId: t.id, title: t.title, commitmentId: m.id, commitmentName: m.name, commitmentColor: m.color,
-      doneAt: c.done_at, dueAt: t.due_at, hasTime: t.has_time === 1, recurIntervalDays: t.recur_interval_days,
+      doneAt: c.done_at, dueAt: t.due_at, hasTime: t.has_time === 1, recurIntervalDays: t.recur_interval_days, recurDays: t.recur_days,
     });
   }
   return rows.sort((a, b) => b.doneAt - a.doneAt);

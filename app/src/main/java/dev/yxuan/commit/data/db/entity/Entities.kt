@@ -61,7 +61,11 @@ data class TodoEntity(
     @ColumnInfo(name = "done_at") val doneAt: Long? = null,
     /** Interval recurrence (M3): due again N days after [lastDoneAt]. */
     @ColumnInfo(name = "recur_interval_days") val recurIntervalDays: Int? = null,
+    /** Calendar recurrence (M10): weekday bitmask (Mon = 1 ... Sun = 64). */
+    @ColumnInfo(name = "recur_days") val recurDays: Int? = null,
     @ColumnInfo(name = "last_done_at") val lastDoneAt: Long? = null,
+    /** Reminder lead time in minutes before [dueAt] (M10). E.g. 0, 15, 30, 60. */
+    @ColumnInfo(name = "reminder_lead_minutes") val reminderLeadMinutes: Int? = null,
 )
 
 @Entity(

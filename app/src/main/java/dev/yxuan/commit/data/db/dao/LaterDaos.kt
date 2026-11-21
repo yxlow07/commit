@@ -23,12 +23,15 @@ data class CompletionRow(
     val dueAt: Long?,
     val hasTime: Boolean,
     val recurIntervalDays: Int?,
-)
+    val recurDays: Int? = null,
+) {
+    val isRecurring: Boolean get() = (recurIntervalDays ?: 0) > 0 || (recurDays ?: 0) > 0
+}
 
 private const val COMPLETION_ROW_SELECT =
     "SELECT c.id AS completionId, t.id AS todoId, t.title AS title, t.commitment_id AS commitmentId, " +
         "m.name AS commitmentName, m.color AS commitmentColor, c.done_at AS doneAt, t.due_at AS dueAt, " +
-        "t.has_time AS hasTime, t.recur_interval_days AS recurIntervalDays " +
+        "t.has_time AS hasTime, t.recur_interval_days AS recurIntervalDays, t.recur_days AS recurDays " +
         "FROM completions c JOIN todos t ON t.id = c.todo_id JOIN commitments m ON m.id = t.commitment_id " +
         "WHERE c.deleted = 0 AND t.deleted = 0 AND m.deleted = 0 "
 
@@ -55,6 +58,9 @@ interface CompletionDao {
 
     @Query("UPDATE completions SET deleted = 1, updated_at = :now, dirty = 1 WHERE id = :id")
     suspend fun softDelete(id: String, now: Long)
+
+    @Query("DELETE FROM completions WHERE done_at < :cutoff AND dirty = 0")
+    suspend fun pruneOld(cutoff: Long): Int
 }
 
 @Dao
@@ -64,6 +70,12 @@ interface ThemeDao {
 
     @Query("SELECT * FROM themes WHERE deleted = 0 ORDER BY name")
     fun observeAll(): Flow<List<ThemeEntity>>
+
+    @Query("SELECT * FROM themes WHERE id = :id")
+    suspend fun getById(id: String): ThemeEntity?
+
+    @Query("UPDATE themes SET deleted = 1, updated_at = :now, dirty = 1 WHERE id = :id")
+    suspend fun softDelete(id: String, now: Long)
 }
 
 @Dao

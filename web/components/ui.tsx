@@ -38,19 +38,21 @@ export function IconButton({ label, className = "", children, ...props }: Button
   );
 }
 
-export function Input({ className = "", ...props }: InputHTMLAttributes<HTMLInputElement>) {
+export function Input({ className = "", style, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
-      className={`rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg outline-none placeholder:text-fg-muted focus:border-primary focus:ring-2 focus:ring-primary/30 ${className}`}
+      style={{ borderRadius: "calc(var(--radius) * 0.5)", ...style }}
+      className={`border border-line bg-surface px-3 py-2 text-sm text-fg outline-none placeholder:text-fg-muted focus:border-primary focus:ring-2 focus:ring-primary/30 ${className}`}
       {...props}
     />
   );
 }
 
-export function Select({ className = "", ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
+export function Select({ className = "", style, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
-      className={`rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-primary ${className}`}
+      style={{ borderRadius: "calc(var(--radius) * 0.5)", ...style }}
+      className={`border border-line bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-primary ${className}`}
       {...props}
     />
   );
@@ -81,8 +83,8 @@ export function ColorDot({ color, size = 10 }: { color: number; size?: number })
   return <span aria-hidden className="inline-block shrink-0 rounded-full" style={{ width: size, height: size, background: cssColor(color) }} />;
 }
 
-export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <div className={`rounded-2xl border border-line bg-surface p-4 ${className}`}>{children}</div>;
+export function Card({ children, className = "", style }: { children: ReactNode; className?: string; style?: React.CSSProperties }) {
+  return <div style={{ borderRadius: "var(--radius)", ...style }} className={`border border-line bg-surface p-4 ${className}`}>{children}</div>;
 }
 
 export function Chip({ selected, onClick, children }: { selected: boolean; onClick: () => void; children: ReactNode }) {
@@ -129,7 +131,8 @@ export function Modal({ open, onClose, title, children }: { open: boolean; onClo
       ref={ref}
       onClose={onClose}
       onClick={(e) => e.target === ref.current && onClose()}
-      className="m-auto w-[min(32rem,calc(100vw-2rem))] rounded-2xl border border-line bg-surface p-0 text-fg backdrop:bg-black/40"
+      style={{ borderRadius: "var(--radius)" }}
+      className="m-auto w-[min(32rem,calc(100vw-2rem))] border border-line bg-surface p-0 text-fg backdrop:bg-black/40"
     >
       {open && (
         <div className="flex flex-col gap-4 p-5">

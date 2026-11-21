@@ -13,6 +13,7 @@ import dev.yxuan.commit.ui.history.HistoryViewModel
 import dev.yxuan.commit.ui.history.SessionDetailViewModel
 import dev.yxuan.commit.ui.recap.RecapViewModel
 import dev.yxuan.commit.ui.settings.SettingsViewModel
+import dev.yxuan.commit.ui.settings.ThemeViewModel
 import dev.yxuan.commit.ui.todos.CommitmentDetailViewModel
 import dev.yxuan.commit.ui.todos.TodoEditorViewModel
 import dev.yxuan.commit.ui.workout.LiveWorkoutViewModel
@@ -34,7 +35,8 @@ val AppViewModelFactory: ViewModelProvider.Factory = viewModelFactory {
     initializer { RoutinesViewModel(createSavedStateHandle(), container.routineRepository, container.workoutRepository) }
     initializer { RoutineEditorViewModel(createSavedStateHandle(), container.routineRepository) }
     initializer { LiveWorkoutViewModel(container.workoutRepository) }
-    initializer { SettingsViewModel(container.settingsRepository) }
+    initializer { SettingsViewModel(container.settingsRepository, container.themeRepository) }
+    initializer { ThemeViewModel(container.themeRepository) }
     initializer { HistoryViewModel(container.historyRepository, container.clock) }
     initializer { SessionDetailViewModel(createSavedStateHandle(), container.historyRepository) }
     initializer { RecapViewModel(createSavedStateHandle(), container.recapRepository) }

@@ -1,6 +1,6 @@
 # Commit — web app (M8)
 
-The PC side of Commit: the same commitments, todos, chores, routines and history as the Android app, with live updates when the phone changes something. Built with Next.js as a **static single-page app**: the browser talks to Supabase directly (row-level security limits every query to your own rows), so there is no server to run. Hosted for free on Cloudflare Pages.
+The PC side of Commit: the same commitments, todos, chores, routines and history as the Android app, with live updates when the phone changes something. Built with Next.js as a **static single-page app**: the browser talks to Supabase directly (row-level security limits every query to your own rows), so there is no server to run. Hosted for free on Cloudflare Pages at **https://commit.yxuan.dev** (custom domain; the project's own address is https://commit-45e.pages.dev).
 
 ## Run locally
 
@@ -30,8 +30,8 @@ npm run build      # static site in web/out/
 
 1. **SQL Editor**: run `supabase/migrations/0003_web.sql` (Realtime on the synced tables + the `toggle_todo` function used for ticking todos).
 2. **Authentication → URL Configuration**:
-   - *Site URL*: your deployed address (e.g. `https://commit-xxx.pages.dev`), or `http://localhost:3000` until you deploy.
-   - *Redirect URLs*: add `http://localhost:3000/**` and `https://<your-project>.pages.dev/**`.
+   - *Site URL*: `https://commit.yxuan.dev`.
+   - *Redirect URLs*: `http://localhost:3000/**`, `https://commit.yxuan.dev/**` (and `https://commit-45e.pages.dev/**` if you use that address).
    Google sign-in returns to these addresses; anything else is refused.
 
 The Google provider and its OAuth web client are the ones already set up for the phone (see `app/SYNC_SETUP.md`); nothing changes in Google Cloud.
@@ -45,7 +45,9 @@ npm run build
 npx wrangler pages deploy out --project-name commit # first run creates the project
 ```
 
-Wrangler prints the `https://commit-….pages.dev` address. Add it to the Supabase redirect URLs (above) and use it as the Site URL. Later deploys: `npm run deploy`.
+Later deploys: `npm run deploy` (builds and uploads `out/`). The custom domain `commit.yxuan.dev` is attached to the Pages project in the Cloudflare dashboard (Workers & Pages → commit → Custom domains), so every deploy goes live there.
+
+> Wrangler 4.166+ may offer to convert a Pages project into a Workers/OpenNext app. This app is a static export, so keep it on Pages: `wrangler pages deploy out --project-name commit` works directly now that the project exists.
 
 ## How it works
 

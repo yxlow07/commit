@@ -18,6 +18,11 @@ class NotificationActionReceiver : BroadcastReceiver() {
                     todoRepository.setDone(todoId, true)
                     Notifications.cancel(context, Notifications.todoNotificationId(todoId))
                 }
+                ACTION_TODO_SNOOZE -> {
+                    val todoId = intent.data?.lastPathSegment ?: return@launchAsync
+                    alarmScheduler.snoozeTodo(todoId, 60 * 60 * 1000L)
+                    Notifications.cancel(context, Notifications.todoNotificationId(todoId))
+                }
                 else -> onWorkoutAction(action)
             }
         }
@@ -25,6 +30,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
     companion object {
         const val ACTION_TODO_DONE = "dev.yxuan.commit.action.TODO_DONE"
+        const val ACTION_TODO_SNOOZE = "dev.yxuan.commit.action.TODO_SNOOZE"
         const val ACTION_WORKOUT_DONE_SET = "dev.yxuan.commit.action.WORKOUT_DONE_SET"
         const val ACTION_WORKOUT_ADD_REST = "dev.yxuan.commit.action.WORKOUT_ADD_REST"
         const val ACTION_WORKOUT_SKIP_REST = "dev.yxuan.commit.action.WORKOUT_SKIP_REST"
@@ -33,7 +39,14 @@ class NotificationActionReceiver : BroadcastReceiver() {
             context,
             Intent(context, NotificationActionReceiver::class.java)
                 .setAction(ACTION_TODO_DONE)
-                .setData(Uri.parse("commit://todo/$todoId")),
+                .setData(Uri.parse("commit://todo_done/$todoId")),
+        )
+
+        fun todoSnooze(context: Context, todoId: String): PendingIntent = broadcast(
+            context,
+            Intent(context, NotificationActionReceiver::class.java)
+                .setAction(ACTION_TODO_SNOOZE)
+                .setData(Uri.parse("commit://todo_snooze/$todoId")),
         )
 
         fun workout(context: Context, action: String): PendingIntent =

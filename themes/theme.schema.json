@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://commit.yxuan.dev/themes/theme.schema.json",
+  "title": "Commit theme",
+  "description": "Design values for the Commit app and web app (F9.1). No code. Missing values are filled from the default theme.",
+  "type": "object",
+  "required": ["schemaVersion", "name"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "name": { "type": "string", "minLength": 1, "maxLength": 40 },
+    "light": { "$ref": "#/$defs/colors" },
+    "dark": { "$ref": "#/$defs/colors" },
+    "shape": {
+      "type": "object",
+      "properties": { "cornerRadius": { "type": "number", "minimum": 0, "maximum": 32 } }
+    },
+    "font": { "enum": ["default", "serif", "mono", "rounded"] }
+  },
+  "$defs": {
+    "color": { "type": "string", "pattern": "^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$" },
+    "colors": {
+      "type": "object",
+      "properties": {
+        "primary": { "$ref": "#/$defs/color" },
+        "onPrimary": { "$ref": "#/$defs/color" },
+        "primaryContainer": { "$ref": "#/$defs/color" },
+        "onPrimaryContainer": { "$ref": "#/$defs/color" },
+        "secondary": { "$ref": "#/$defs/color" },
+        "onSecondary": { "$ref": "#/$defs/color" },
+        "secondaryContainer": { "$ref": "#/$defs/color" },
+        "onSecondaryContainer": { "$ref": "#/$defs/color" },
+        "background": { "$ref": "#/$defs/color" },
+        "onBackground": { "$ref": "#/$defs/color" },
+        "surface": { "$ref": "#/$defs/color" },
+        "onSurface": { "$ref": "#/$defs/color" },
+        "surfaceVariant": { "$ref": "#/$defs/color" },
+        "onSurfaceVariant": { "$ref": "#/$defs/color" },
+        "outline": { "$ref": "#/$defs/color" },
+        "error": { "$ref": "#/$defs/color" },
+        "onError": { "$ref": "#/$defs/color" }
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "name": "Forest",
+  "light": {
+    "primary": "#2E6B30",
+    "onPrimary": "#FFFFFF",
+    "primaryContainer": "#C8EFC0",
+    "onPrimaryContainer": "#002204",
+    "secondary": "#7A5B2E",
+    "secondaryContainer": "#FFDDB0",
+    "background": "#F7F8F2",
+    "surface": "#FFFFFF",
+    "onSurface": "#1A1C18",
+    "surfaceVariant": "#ECEFE4",
+    "onSurfaceVariant": "#53604F",
+    "outline": "#D8DDCF"
+  },
+  "shape": { "cornerRadius": 8 },
+  "font": "serif"
+}

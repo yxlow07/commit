@@ -9,6 +9,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -16,6 +17,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import dev.yxuan.commit.domain.RecapKind
+import dev.yxuan.commit.domain.theme.ActiveTheme
 import dev.yxuan.commit.notify.Notifications
 import dev.yxuan.commit.ui.CommitmentRoute
 import dev.yxuan.commit.ui.CommitmentsRoute
@@ -25,6 +27,7 @@ import dev.yxuan.commit.ui.LiveWorkoutRoute
 import dev.yxuan.commit.ui.RecapRoute
 import dev.yxuan.commit.ui.RoutineEditorRoute
 import dev.yxuan.commit.ui.SettingsRoute
+import dev.yxuan.commit.ui.ThemeRoute
 import dev.yxuan.commit.ui.TodoEditorRoute
 import dev.yxuan.commit.ui.commitments.CommitmentsScreen
 import dev.yxuan.commit.ui.history.HistoryScreen
@@ -32,6 +35,7 @@ import dev.yxuan.commit.ui.history.SessionDetailScreen
 import dev.yxuan.commit.ui.recap.RecapScreen
 import dev.yxuan.commit.ui.settings.AccountSection
 import dev.yxuan.commit.ui.settings.SettingsScreen
+import dev.yxuan.commit.ui.settings.ThemeScreen
 import dev.yxuan.commit.ui.theme.CommitTheme
 import dev.yxuan.commit.ui.todos.CommitmentDetailScreen
 import dev.yxuan.commit.ui.todos.TodoEditorScreen
@@ -51,10 +55,17 @@ class MainActivity : ComponentActivity() {
             requestNotificationsOnce()
         }
         setContent {
-            CommitTheme {
+            val activeTheme by appContainer.themeRepository.observeActive().collectAsState(ActiveTheme.Dynamic)
+            CommitTheme(active = activeTheme) {
                 CommitNavHost(pendingRoute = pendingRoute, onRouteOpened = { pendingRoute = null })
             }
         }
+    }
+
+    /** Sync whenever the app comes to the front, so a phone that was off catches up right away. */
+    override fun onStart() {
+        super.onStart()
+        appContainer.syncManager.requestSync()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -130,7 +141,14 @@ private fun CommitNavHost(pendingRoute: Any?, onRouteOpened: () -> Unit) {
             TodoEditorScreen(onDone = { nav.popBackStack() })
         }
         composable<SettingsRoute> {
-            SettingsScreen(onBack = { nav.popBackStack() }, accountSection = { AccountSection() })
+            SettingsScreen(
+                onBack = { nav.popBackStack() },
+                onOpenTheme = { nav.navigate(ThemeRoute) },
+                accountSection = { AccountSection() },
+            )
+        }
+        composable<ThemeRoute> {
+            ThemeScreen(onBack = { nav.popBackStack() })
         }
         composable<RecapRoute> {
             RecapScreen(onBack = { nav.popBackStack() })

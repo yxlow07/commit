@@ -26,13 +26,15 @@ data class TodoEditorState(
     val commitmentId: String? = null,
     val due: Due? = null,
     val repeatDays: Int? = null,
+    val recurDays: Int? = null,
+    val reminderLeadMinutes: Int? = null,
     /** True once saved or deleted; the screen then navigates back. */
     val finished: Boolean = false,
 ) {
     val canSave: Boolean get() = title.isNotBlank() && commitmentId != null
 }
 
-/** Create or edit a todo: title, due date/time, commitment (move), delete (F2.1, F2.3). */
+/** Create or edit a todo: title, due date/time, commitment (move), recurrence, reminder lead time, delete (F2.1, F2.3, F4, F7). */
 class TodoEditorViewModel(
     savedStateHandle: SavedStateHandle,
     commitments: CommitmentRepository,
@@ -60,6 +62,8 @@ class TodoEditorViewModel(
                     commitmentId = todo.commitmentId,
                     due = Due.of(todo, clock),
                     repeatDays = todo.recurIntervalDays,
+                    recurDays = todo.recurDays,
+                    reminderLeadMinutes = todo.reminderLeadMinutes,
                 )
             } else {
                 TodoEditorState(loaded = true, commitmentId = route.commitmentId)
@@ -71,6 +75,8 @@ class TodoEditorViewModel(
     fun setCommitment(id: String) = _state.update { it.copy(commitmentId = id) }
     fun setDue(due: Due?) = _state.update { it.copy(due = due) }
     fun setRepeat(days: Int?) = _state.update { it.copy(repeatDays = days) }
+    fun setRecurDays(days: Int?) = _state.update { it.copy(recurDays = days) }
+    fun setReminderLead(minutes: Int?) = _state.update { it.copy(reminderLeadMinutes = minutes) }
 
     fun save() {
         val s = _state.value
@@ -78,8 +84,8 @@ class TodoEditorViewModel(
         if (!s.canSave) return
         viewModelScope.launch {
             val id = route.todoId
-            if (id == null) todos.add(commitmentId, s.title, s.due, s.repeatDays)
-            else todos.update(id, s.title, commitmentId, s.due, s.repeatDays)
+            if (id == null) todos.add(commitmentId, s.title, s.due, s.repeatDays, s.recurDays, s.reminderLeadMinutes)
+            else todos.update(id, s.title, commitmentId, s.due, s.repeatDays, s.recurDays, s.reminderLeadMinutes)
             _state.update { it.copy(finished = true) }
         }
     }

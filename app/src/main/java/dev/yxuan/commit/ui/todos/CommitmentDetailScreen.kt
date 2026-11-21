@@ -35,6 +35,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.yxuan.commit.DeviceClock
 import dev.yxuan.commit.data.db.entity.CommitmentType
+import dev.yxuan.commit.domain.Recurrence
 import dev.yxuan.commit.domain.TodoItem
 import dev.yxuan.commit.ui.AppViewModelFactory
 import dev.yxuan.commit.ui.format.DueFormatter
@@ -134,7 +135,7 @@ private fun TodoRow(item: TodoItem, onToggle: (Boolean) -> Unit, onClick: () -> 
         } else if (!item.isDone && due.status != DueStatus.NONE) {
             add(due.text)
         }
-        if (item.isRecurring) add("every ${todo.recurIntervalDays}d")
+        if (item.isRecurring) add(Recurrence.label(todo))
     }.joinToString(" · ")
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),

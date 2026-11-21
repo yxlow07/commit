@@ -35,7 +35,11 @@ export interface Todo extends Synced {
   done_at: number | null;
   /** Interval recurrence: due again N days after last_done_at. */
   recur_interval_days: number | null;
+  /** Calendar recurrence: weekday bitmask (Mon = 1 ... Sun = 64). */
+  recur_days: number | null;
   last_done_at: number | null;
+  /** Reminder lead time in minutes before due_at (e.g. 0, 15, 30, 60). */
+  reminder_lead_minutes: number | null;
 }
 
 export interface Completion extends Synced {
@@ -89,6 +93,11 @@ export interface Settings extends Synced {
   active_theme_id: string | null;
 }
 
+export interface Theme extends Synced {
+  name: string;
+  json: string;
+}
+
 export interface Tables {
   commitments: Commitment;
   todos: Todo;
@@ -98,10 +107,11 @@ export interface Tables {
   workout_sessions: WorkoutSession;
   workout_sets: WorkoutSet;
   settings: Settings;
+  themes: Theme;
 }
 
 export type TableName = keyof Tables;
 
 export const TABLES: TableName[] = [
-  "commitments", "todos", "completions", "routines", "exercises", "workout_sessions", "workout_sets", "settings",
+  "commitments", "todos", "completions", "routines", "exercises", "workout_sessions", "workout_sets", "settings", "themes",
 ];

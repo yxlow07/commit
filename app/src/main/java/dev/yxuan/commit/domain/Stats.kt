@@ -43,7 +43,7 @@ object Stats {
 
         return rows.groupBy { it.commitmentId }.map { (id, list) ->
             val first = list.first()
-            val streaks = list.filter { (it.recurIntervalDays ?: 0) > 0 }
+            val streaks = list.filter { it.isRecurring }
                 .groupBy { it.todoId }
                 .map { (_, done) -> done.first().title to choreStreak(done, lateness, today, zone) }
                 .filter { it.second > 0 }
@@ -65,12 +65,12 @@ object Stats {
         val result = HashMap<String, Boolean>()
         rows.groupBy { it.todoId }.forEach { (_, done) ->
             val sorted = done.sortedBy { it.doneAt }
-            val interval = sorted.first().recurIntervalDays ?: 0
-            if (interval > 0) {
+            val first = sorted.first()
+            if (first.isRecurring) {
                 var previous: LocalDate? = null
                 for (c in sorted) {
                     val day = c.doneAt.date(zone)
-                    val dueDay = previous?.plusDays(interval.toLong()) ?: c.dueAt?.date(zone)
+                    val dueDay = previous?.let { nextDueAfter(first, it) } ?: firstDueDay(first, zone)
                     if (dueDay != null) result[c.completionId] = day.isAfter(dueDay)
                     previous = day
                 }
@@ -86,10 +86,24 @@ object Stats {
 
     private fun choreStreak(done: List<CompletionRow>, lateness: Map<String, Boolean>, today: LocalDate, zone: ZoneId): Int {
         val sorted = done.sortedByDescending { it.doneAt }
-        val interval = sorted.first().recurIntervalDays ?: return 0
-        val nextDue = sorted.first().doneAt.date(zone).plusDays(interval.toLong())
+        if (!sorted.first().isRecurring) return 0
+        val nextDue = nextDueAfter(sorted.first(), sorted.first().doneAt.date(zone))
         if (today.isAfter(nextDue)) return 0 // overdue now: streak broken
         return sorted.takeWhile { lateness[it.completionId] != true }.size
+    }
+
+    /** A chore's due day after it was done on [doneDay]: + interval, or the next matching weekday (F4.2, F4.3). */
+    private fun nextDueAfter(row: CompletionRow, doneDay: LocalDate): LocalDate {
+        val mask = row.recurDays ?: 0
+        return if (mask > 0) Recurrence.nextMatchingDay(mask, doneDay.plusDays(1))
+        else doneDay.plusDays((row.recurIntervalDays ?: 0).toLong())
+    }
+
+    /** Due day of a chore's first completion: its due date (the first matching weekday on or after it). */
+    private fun firstDueDay(row: CompletionRow, zone: ZoneId): LocalDate? {
+        val due = row.dueAt?.date(zone) ?: return null
+        val mask = row.recurDays ?: 0
+        return if (mask > 0) Recurrence.nextMatchingDay(mask, due) else due
     }
 
     /** Completions per local day, for the heatmap (F8.2). */

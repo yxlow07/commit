@@ -18,6 +18,9 @@ object LiveWorkoutRoute
 object SettingsRoute
 
 @Serializable
+object ThemeRoute
+
+@Serializable
 object HistoryRoute
 
 @Serializable

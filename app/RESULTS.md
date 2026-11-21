@@ -308,3 +308,222 @@ Found and fixed during these checks:
 Expected behaviour seen: the phone's own uploads trigger "echo" pushes (one per changed table), each followed by a quick sync that changes nothing.
 
 Not re-run this round: instrumented tests (they uninstall the app and sign out); unit tests 32 of 32 pass and androidTest compiles.
+
+
+---
+
+# Results: M8 web app (2026-11-21)
+
+Plan: last section of [PLAN.md](PLAN.md). Code: `web/` (see `web/README.md`). Live: https://commit.yxuan.dev (custom domain on the Cloudflare Pages project; also https://commit-45e.pages.dev)
+
+## Status
+
+| Area | Status |
+| --- | --- |
+| Next.js 16.4 static export (no server), Tailwind, React Query, Recharts | Done |
+| Phone rules ported to TypeScript (recurrence, due labels, stats, PBs, formats) | Done, 19 Vitest tests mirroring the Kotlin cases |
+| Google sign-in (Supabase PKCE redirect) | Works locally and on the live site |
+| Todos: commitments (create/edit/recolour/reorder/archive), add/edit/move/delete, tick/untick, done section | Done |
+| Workouts + routine editor (planned days, exercises) | Done; not exercised with real data yet |
+| History: heatmap (6 months / 1 year), filter, stats, timeline, sessions, editable sets, progress charts | Done; tasks tab verified, workout tabs need workout data |
+| Settings: recap times/toggles (shared settings row), sign out | Done |
+| Live updates (Realtime) | Done |
+| `supabase/migrations/0003_web.sql` (Realtime + `toggle_todo`) | Applied |
+| Cloudflare Pages deploy | Live at https://commit.yxuan.dev, sign-in and live updates verified |
+
+## Verification
+
+- `npm test` 19/19, `npm run typecheck`, `npm run lint`, `npm run build` clean.
+- In Chrome against the real Supabase project:
+  - phone data shown (Sync test, 2 done todos); added "Web todo"; ticked it via `toggle_todo` → Done (3) and in History at 16:53 next to the phone's completions (03:48, 03:49); heatmap, stats, Settings rendered; no console errors
+  - phone untick at 17:07:31 appeared on the open web page within about 3 s without reload (Realtime)
+  - web → phone by sync: "Web todo" on the phone after a sync
+  - web → phone by push: unreliable after the emulator was restored from a snapshot (13 h clock jump): one push never arrived, the next took about 60 s (this morning: 1.2 s)
+
+## Found and fixed
+
+- **Google `redirect_uri_mismatch` on web sign-in**: the phone uses ID tokens (no redirect), so the Supabase callback had never been added to the Google web OAuth client. Fixed in Google Cloud.
+- **Stale phone after being off**: the app didn't sync when brought to the front, and pushes expired after 5 minutes. Now syncs on every `onStart`; push TTL 1 day. *Pending:* app install (blocked by a file lock on `app/build`, likely Android Studio) and redeploying `notify-sync`.
+- **Wrangler 4.166 tried to convert the static site into a Workers/OpenNext app** (added packages, configs, scripts, changed `next.config.ts`) and failed; all reverted, project created on classic Pages with `--force` (once), then deployed with `wrangler pages deploy out`.
+- `supabase/` folder had disappeared from disk; regenerated (0001 from Room's schema, 0002, 0003, `notify-sync`).
+- Vitest 5 needed `@types/node` ≥ 22 (now 24, matching Node 24).
+
+## Deviations from the plan
+
+- No separate `/login` page: any page shows the sign-in screen when signed out (simpler for a static app).
+- History range switch (6 months / 1 year) and "Show more" instead of a fixed window.
+
+## Pending
+
+- ~~Sign in on the live site.~~ Done: signed in on https://commit.yxuan.dev (Supabase Site URL + Redirect URL set); data matches the phone; phone untick at 17:43:33 appeared live on the site within a few seconds.
+- ~~Install the app build with sync-on-start; redeploy `notify-sync` (TTL); re-test push.~~ Done: reopening the app starts a sync within a second (17:34:39); push path back to about 1 s (tick 17:35:13.0 → upload 13.3 → push 14.0) after redeploying `notify-sync`. The earlier slow/missing pushes were most likely the snapshot-restored emulator's push connection. The build had been blocked by a stale Gradle daemon file handle; fixed by `gradlew --stop` and deleting `app/build/intermediates/javac`.
+- Exercise workouts end to end on the web (routine editor, session detail, progress) once a workout is logged.
+
+
+---
+
+# Results: M9 (Themes)
+
+Date: 2026-11-21. Plan: fifth section of [PLAN.md](PLAN.md). Spec: [themes/README.md](../themes/README.md). Schema: [themes/theme.schema.json](../themes/theme.schema.json).
+
+## Status
+
+M9 is implemented across the Android app, widget, and the web app (deployed live at https://commit.yxuan.dev).
+
+| Area | Status |
+| --- | --- |
+| JSON theme format v1: light/dark colors, corner radius, font family (F9.1) | Done |
+| Validation with plain-language error reporting and default filling (F9.2) | Done on both Kotlin and TypeScript |
+| Example themes: Ocean (rounded), Forest (serif), High contrast | Done, served at `https://commit.yxuan.dev/themes/*.json` |
+| Built-in themes: Material You (dynamic), Light (forced light), Dark (forced dark) | Done (Material You uses default palette on the web) |
+| Android app theme engine: dynamic ColorScheme, shapes, fonts (incl. Nunito) | Done, template `Color.kt` removed |
+| Android theme picker screen: live previews, apply, delete (F9.3) | Done (`Settings` → `Theme`) |
+| Import from file (Storage Access Framework) and import from link | Done on both Android and Web |
+| Widget theming: Glance follows the active theme using `ColorProviders` | Done |
+| Synced themes through Supabase (`themes` table, `active_theme_id` in settings) | Done |
+| Web app `ThemeProvider`: dynamic CSS variables, Nunito font, responsive radius | Done |
+| Web Settings: Theme section with built-in selection, imported list, import actions | Done |
+| Deployed to Cloudflare Pages | Live at https://commit.yxuan.dev |
+
+## Verification
+
+**Unit tests:**
+- **Android** (`./gradlew :app:testDebugUnitTest`): **45 of 45 pass** (13 new in `ThemeParserTest`: valid Ocean, Forest with defaults filled, High contrast, unsupported/missing schemaVersion, name validation, invalid colors, invalid radius, invalid font, oversized file cap, malformed JSON, parseColor, builtin theme resolution).
+- **Web** (`npm test`): **29 of 29 pass** (10 new in `theme.test.ts` mirroring the Kotlin cases against the same example files, plus CSS variable generation).
+
+**Builds & Type checks:**
+- Android: `./gradlew :app:assembleDebug` passes cleanly.
+- Web: `npm run typecheck`, `npm run lint` (0 errors, 0 warnings), and `npm run build` (Next.js static export with 9/9 pages) all clean.
+
+**Deployment:**
+- Deployed to Cloudflare Pages via Wrangler (`npx wrangler pages deploy out --project-name commit`). Live on `https://commit.yxuan.dev`.
+- Public sample themes served at `/themes/ocean.json`, `/themes/forest.json`, `/themes/high-contrast.json`.
+
+## Code map
+
+- `themes/`: `theme.schema.json`, `README.md`, `examples/*.json`
+- Android domain: `domain/theme/ThemeSpec.kt`
+- Android data: `data/repo/ThemeRepository.kt`, `data/db/dao/LaterDaos.kt` (`ThemeDao`)
+- Android UI: `ui/theme/Theme.kt`, `ui/settings/ThemeScreen.kt`, `ui/settings/SettingsScreen.kt`, `widget/CommitWidget.kt`
+- Android Font & License: `app/src/main/res/font/nunito.ttf`, `app/licenses/Nunito-OFL.txt`
+- Web domain: `web/lib/domain/theme.ts`, `web/lib/domain/theme.test.ts`, `web/lib/domain/types.ts`
+- Web UI & Data: `web/components/ThemeProvider.tsx`, `web/app/settings/page.tsx`, `web/lib/data/mutations.ts`, `web/public/themes/*.json`
+
+
+---
+
+# Results: M10 (Calendar Recurrence, Snooze & Local Data Retention)
+
+Date: 2026-11-21. Plan: sixth section of [PLAN.md](PLAN.md).
+
+## Status
+
+Milestone 10 is fully implemented and verified across the Android native app, Room database, alarm/notification subsystems, web frontend, and cloud sync schema.
+
+| Area | Status |
+| --- | --- |
+| Calendar recurrence weekday bitmask (Mon = 1 ... Sun = 64) (F4.3 - P2) | Done on Android and Web |
+| Chores carry forward until completed when missed | Done, tested on both platforms |
+| Recurrence labels ("Mon · Wed · Fri" / "every N days") | Done |
+| Android notification "Snooze 1h" action (F7.4 - P1) | Done via `NotificationActionReceiver` |
+| Configurable reminder lead time (At due time, 15m, 30m, 1h) (F7.1 - P1) | Done on Android & Web forms |
+| Room v5 → v6 auto-migration with exported `6.json` schema | Done |
+| Supabase SQL migration `0004_calendar_recurrence_and_lead_time.sql` | Written, **not applied** (found in the review below) |
+| Local data retention pruning (`clean` rows older than 365 days) | Written but never called; fixed in the review below |
+| Android UI: DayOfWeek filter chips + lead time chips in `TodoForm` | Done |
+| Android Quick-Add widget dialog & TodoEditorScreen wiring | Done |
+| Web UI: Recurrence mode dropdown + weekday pills + lead time selector | Done |
+| Web deployment to Cloudflare Pages | Live at https://commit.yxuan.dev |
+
+## Verification
+
+**Android Unit Tests** (`./gradlew :app:testDebugUnitTest`):
+- **51 of 51 tests pass** (6 new tests added: `RetentionTest` verifying 365-day start-of-day cutoffs and custom day pruning cutoffs; `RecurrenceTest` verifying calendar recurrence next-matching-day, same-day reset, overdue/missed carry-forward, and combined label formatting).
+
+**Android Build & Schema**:
+- `./gradlew :app:assembleDebug` builds cleanly.
+- Room exported schema `app/schemas/dev.yxuan.commit.data.db.AppDatabase/6.json` verified with `recur_days` and `reminder_lead_minutes` columns on `todos`.
+
+**Web Suite**:
+- `npm test` (Vitest): **31 of 31 tests pass** (including new calendar recurrence tests in `domain.test.ts`).
+- `npm run typecheck`: clean (0 errors).
+- `npm run lint`: clean (0 warnings/errors).
+- `npm run build`: optimized static production build generated with 9/9 pages.
+
+**Deployment**:
+- Deployed to Cloudflare Pages (`https://commit.yxuan.dev`).
+
+## Code Map
+
+- Database & Migrations:
+  - `app/src/main/java/dev/yxuan/commit/data/db/AppDatabase.kt`
+  - `app/src/main/java/dev/yxuan/commit/data/db/entity/Entities.kt`
+  - `app/src/main/java/dev/yxuan/commit/data/db/dao/LaterDaos.kt`
+  - `app/src/main/java/dev/yxuan/commit/data/db/dao/WorkoutDaos.kt`
+  - `app/schemas/dev.yxuan.commit.data.db.AppDatabase/6.json`
+  - `supabase/migrations/0004_calendar_recurrence_and_lead_time.sql`
+- Retention & Recurrence Domain:
+  - `app/src/main/java/dev/yxuan/commit/domain/Recurrence.kt`
+  - `app/src/main/java/dev/yxuan/commit/domain/RetentionManager.kt`
+  - `app/src/main/java/dev/yxuan/commit/data/repo/TodoRepository.kt`
+- Notifications & Alarms:
+  - `app/src/main/java/dev/yxuan/commit/notify/Notifications.kt`
+  - `app/src/main/java/dev/yxuan/commit/notify/NotificationActionReceiver.kt`
+  - `app/src/main/java/dev/yxuan/commit/alarm/AlarmScheduler.kt`
+  - `app/src/main/java/dev/yxuan/commit/alarm/Receivers.kt`
+- UI:
+  - `app/src/main/java/dev/yxuan/commit/ui/todos/TodoForm.kt`
+  - `app/src/main/java/dev/yxuan/commit/ui/todos/TodoEditorViewModel.kt`
+  - `app/src/main/java/dev/yxuan/commit/ui/todos/TodoEditorScreen.kt`
+  - `app/src/main/java/dev/yxuan/commit/quickadd/QuickAddActivity.kt`
+  - `web/lib/domain/recurrence.ts`
+  - `web/components/TodoForm.tsx`
+  - `web/components/TodosView.tsx`
+  - `web/lib/data/mutations.ts`
+  - `web/lib/domain/types.ts`
+- Tests:
+  - `app/src/test/java/dev/yxuan/commit/domain/RecurrenceTest.kt`
+  - `app/src/test/java/dev/yxuan/commit/domain/RetentionTest.kt`
+  - `web/lib/domain/domain.test.ts`
+
+
+---
+
+# Results: M9 + M10 review fixes (2026-11-21)
+
+A review of M9 and M10 found that neither build had been installed on the emulator (last install 17:34, before M9), that `0004` had never been applied to Supabase, and several M10 bugs. Fixed and checked on the emulator (Medium Phone, API 37).
+
+## Found and fixed
+
+| Problem | Fix |
+| --- | --- |
+| **Todo sync broken:** the phone and web send `recur_days` / `reminder_lead_minutes`, which the server didn't have. Reproduced on the emulator: `PGRST204 Could not find the 'recur_days' column` | Apply `0004` (see Pending) |
+| **Web tick of a weekday chore** set `done_at` (one-off) because `toggle_todo` only checked `recur_interval_days`; the chore then vanished from the phone for good | `supabase/migrations/0005_toggle_todo_calendar.sql`: `toggle_todo` also checks `recur_days`; repairs rows already hit |
+| **Retention never ran** (`purgeOldHistory` had no callers) | Runs at most once a day after a successful sync, inside the sync lock (`SyncManager.purgeOldHistoryDaily`); one transaction |
+| Retention deleted sets whose session wasn't on the phone yet (sets pulled before their session were lost for good) | Sets are picked by their old, synced session; sessions with unsynced sets are kept |
+| **Snooze lost** on the next reschedule (any change, sync, midnight, boot) | Snoozes stored in `SnoozeStore` (phone-only prefs, tied to the due time); `rescheduleTodos` re-sets them; cleared when it rings, the todo is done/deleted or its due time changes |
+| Reminder always said "Due now · 14:00", also with a lead time or after a snooze | `ReminderText`: "Due in 15 min · 14:00", "Due now · 14:00", "Overdue · was due 14:00" |
+| Phone and web disagreed on a never-done weekday chore with a past due date (phone moved it to today, web showed it overdue); phone list label and alarms disagreed too | Same rule on both: first matching weekday on or after the due date, overdue until done; keeps the due time when the due date is a matching day |
+| **"every nulld"** under weekday chores in the commitment list (found on the emulator) | Uses `Recurrence.label` ("Mon · Thu", "every 4 days") |
+| History ignored weekday chores: no "chore" tag, judged on time/late as one-off todos, no streaks (phone and web) | `CompletionRow.recurDays`; lateness and streaks use the next matching weekday |
+| Web wrote `#AARRGGBB` theme colours straight into CSS (read as `#RRGGBBAA`) | `cssColor` moves the alpha to the end |
+| Unselecting the last weekday silently switched to Monday | It now does nothing (at least one day stays selected) |
+| Theme download never closed its connection and swallowed cancellation | `disconnect()` in `finally`; `CancellationException` rethrown |
+
+## Verification
+
+- **Android unit tests:** 56 of 56 pass (new: `ReminderTextTest` 3, a never-done weekday chore in `RecurrenceTest`, weekday chore lateness/streak in `StatsTest`). `assembleDebug` clean.
+- **Web:** `npm test` 34 of 34 (new: never-done weekday chore, weekday chore stats, `cssColor`), `typecheck`, `lint`, `build` clean.
+- **Emulator:**
+  - Real upgrade DB v5 → v6 with data: `user_version` 6, new columns present, existing rows not marked dirty.
+  - Lead time: todo due 23:49:59 with "15m before" → alarm at 23:34:59; notification "Due in 15 min · 23:49".
+  - On time: "Due now · 23:36" with Done and Snooze 1h.
+  - Snooze 1h from the shade → stored and alarm at 00:37:42; still set after an app update (which clears all alarms and re-runs the boot reschedule) and after ticking another todo.
+  - Weekday chore (Mon · Thu, due Thu 19 Nov, viewed Sat 21 Nov): "Overdue · 2d · Mon · Thu".
+
+## Pending
+
+- Apply `supabase/migrations/0004_calendar_recurrence_and_lead_time.sql` then `0005_toggle_todo_calendar.sql` in the Supabase SQL Editor. Until then, todo uploads from the phone and new todos from the web fail.
+- Redeploy the web app (`npm run deploy` in `web/`).
+- Then: phone ↔ web check of a weekday chore (create, tick on the web, phone shows it done until the next matching day), lead time on the web, and retention after a sync.
+

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Commitment } from "@/lib/domain/types";
-import { intervalLabel, openItems, todoItem, type TodoItem } from "@/lib/domain/recurrence";
+import { openItems, recurrenceLabel, todoItem, type TodoItem } from "@/lib/domain/recurrence";
 import { formatDue } from "@/lib/domain/due";
 import { useTable } from "@/lib/data/store";
 import { createTodo, deleteTodo, moveCommitment, setTodoDone, updateCommitment, updateTodo } from "@/lib/data/mutations";
@@ -168,7 +168,7 @@ function TodoRow({ item, commitments, now }: { item: TodoItem; commitments: Comm
 
   const details = [
     item.isDone && item.isRecurring ? `Next: ${formatDue(item.dueAt, false, now).text}` : !item.isDone ? due.text : "",
-    item.isRecurring ? intervalLabel(todo.recur_interval_days!) : "",
+    item.isRecurring ? recurrenceLabel(todo) : "",
   ].filter(Boolean).join(" · ");
 
   return (

@@ -78,6 +78,7 @@ object Notifications {
             .setAutoCancel(true)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .addAction(0, "Done", NotificationActionReceiver.todoDone(context, todo.id))
+            .addAction(0, "Snooze 1h", NotificationActionReceiver.todoSnooze(context, todo.id))
             .build()
     }
 }

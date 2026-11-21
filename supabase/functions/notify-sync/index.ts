@@ -51,7 +51,8 @@ async function sendSyncPing(token: string, accessToken: string): Promise<boolean
       message: {
         token,
         data: { type: "sync" },
-        android: { priority: "HIGH", ttl: "300s", collapse_key: "sync" },
+        // Kept for a day: a phone that's off gets one "sync" ping when it comes back (collapse_key keeps one).
+        android: { priority: "HIGH", ttl: "86400s", collapse_key: "sync" },
       },
     }),
   });
