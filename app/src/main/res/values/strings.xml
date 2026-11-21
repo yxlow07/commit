@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Commit</string>
+    <string name="widget_description">Your todos by commitment. Tick, add and switch tabs from the home screen.</string>
+    <string name="quick_add_label">Add todo</string>
+</resources>
