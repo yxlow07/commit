@@ -640,3 +640,5 @@ Changed (2026-11-22), todo editing:
 - **"After I finish it" units:** a number wheel and a days / weeks / months / years wheel. Still stored as `recur_interval_days` (week 7, month 30, year 365), so sync and the web app are unchanged; labels show the largest exact unit ("Every 2 weeks") on the phone and the web (`IntervalUnit`, `IntervalUnitTest`; web `intervalLabel` + test). Months and years are approximate (30 / 365 days after finishing).
 - **Delete todo** is a trash icon on a light grey square, in the popup and the editor.
 Checked on the emulator: date wheels (Thursday 19 November 2026), unit wheel to "2 weeks" with the summary following, delete icon. Unit tests 66 of 66; web 39 of 39.
+
+Changed (2026-11-22): **Swipe to select weekdays.** Press on a day and slide across the weekday buttons to paint several: starting on an unselected day selects every day passed, starting on a selected one clears them (a haptic tick per day; taps still toggle one day; the todo editor keeps at least one day). Same component for a routine's planned days. Checked on the emulator: Mon+Thu, swipe Tue to Fri gives Mon to Fri; swipe Fri back to Wed leaves Mon+Tue.

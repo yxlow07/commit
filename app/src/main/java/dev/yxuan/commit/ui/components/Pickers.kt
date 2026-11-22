@@ -1,6 +1,12 @@
 package dev.yxuan.commit.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -41,13 +47,55 @@ import java.util.Locale
 
 /**
  * Seven weekday toggle buttons in one row: selected `ink` with `onInk` text, others `fill`. Used for
- * a todo's repeat days and a routine's planned days. [keepOne] stops the last day being unselected.
+ * a todo's repeat days and a routine's planned days. Tap toggles one day; press and slide across
+ * the row to paint several: starting on an unselected day selects every day passed, starting on a
+ * selected one clears them. [keepOne] stops the last day being unselected.
  */
 @Composable
 fun WeekdayToggles(mask: Int, onChange: (Int) -> Unit, modifier: Modifier = Modifier, keepOne: Boolean = false) {
     val c = Commit.colors
-    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        DayOfWeek.entries.forEach { day ->
+    val haptics = LocalHapticFeedback.current
+    val currentMask by rememberUpdatedState(mask)
+    val currentOnChange by rememberUpdatedState(onChange)
+    var rowWidth by remember { mutableIntStateOf(1) }
+    val days = DayOfWeek.entries
+
+    Row(
+        modifier
+            .fillMaxWidth()
+            .onSizeChanged { rowWidth = it.width.coerceAtLeast(1) }
+            .pointerInput(keepOne) {
+                var painting = true // select (true) or clear (false), set by the first day touched
+                var last = -1
+                fun dayAt(x: Float) = (x / (rowWidth / 7f)).toInt().coerceIn(0, 6)
+                fun paint(i: Int) {
+                    if (i == last) return
+                    last = i
+                    val bit = Weekdays.bit(days[i])
+                    val now = currentMask
+                    val next = if (painting) now or bit else now and bit.inv()
+                    if (next != now && (!keepOne || next > 0)) {
+                        haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
+                        currentOnChange(next)
+                    }
+                }
+                detectHorizontalDragGestures(
+                    onDragStart = { offset ->
+                        val i = dayAt(offset.x)
+                        painting = !Weekdays.contains(currentMask, days[i])
+                        last = -1
+                        paint(i)
+                    },
+                    onDragEnd = { last = -1 },
+                    onDragCancel = { last = -1 },
+                ) { change, _ ->
+                    change.consume()
+                    paint(dayAt(change.position.x))
+                }
+            },
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        days.forEach { day ->
             val on = Weekdays.contains(mask, day)
             val name = day.getDisplayName(TextStyle.SHORT, Locale.getDefault())
             Box(
