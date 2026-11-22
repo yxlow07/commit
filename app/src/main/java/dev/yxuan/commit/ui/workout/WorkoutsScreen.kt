@@ -138,7 +138,7 @@ fun LazyListScope.workoutSections(w: WorkoutSections, onOpenRoutine: (String) ->
         }
         if (own.isEmpty()) {
             item(key = "we-${owner.id}") {
-                Text("No routines yet. Add one with +.", style = Commit.type.body, color = Commit.colors.textStrong, modifier = Modifier.padding(vertical = Space.s))
+                Text("No routines yet. Add each workout day with +, like Push, Pull and Legs.", style = Commit.type.body, color = Commit.colors.textStrong, modifier = Modifier.padding(vertical = Space.s))
             }
         }
         items(own, key = { it.routine.id }) { r ->
