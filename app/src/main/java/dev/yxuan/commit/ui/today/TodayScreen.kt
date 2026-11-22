@@ -20,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.LastBaseline
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -172,11 +173,11 @@ fun TodayScreen(
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
                     Row(
                         Modifier.weight(1f).semantics(mergeDescendants = true) { heading() },
-                        verticalAlignment = Alignment.Bottom,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Text(today.dayOfMonth.toString(), style = t.displayXl.copy(lineHeight = 80.sp, letterSpacing = (-4).sp), color = c.ink)
-                        Column(Modifier.padding(bottom = 6.dp)) {
+                        // The month sits on the numeral's baseline, so both blocks share one bottom line.
+                        Text(today.dayOfMonth.toString(), style = t.displayXl.copy(lineHeight = 80.sp, letterSpacing = (-4).sp), color = c.ink, modifier = Modifier.alignBy(LastBaseline))
+                        Column(Modifier.alignBy(LastBaseline)) {
                             Text(today.format(DateTimeFormatter.ofPattern("EEEE", Locale.getDefault())), style = t.bodyL.copy(fontWeight = FontWeight.Medium, lineHeight = 21.sp), color = c.ink)
                             Text(today.format(DateTimeFormatter.ofPattern("MMMM", Locale.getDefault())), style = t.bodyL.copy(lineHeight = 21.sp), color = c.muted)
                         }

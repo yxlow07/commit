@@ -660,3 +660,6 @@ Changed (2026-11-22), not yet verified on a device:
 - Verified on emulator-5554 after the cold boot: translucent widget, see-through popup (`Clear`, blur is off on emulators), and the segment highlight gliding between commitments. `Frosted` still needs a real Android 12+ device.
 - Boxes on glass panels (fields, segmented track, wheel bands, delete button) use a solid `fill` of `ink` at 13 % (20 % dark) over `surface`, provided through `LocalCommitColors` inside `DialogPanel`. The theme's plain `fill` all but vanished on the see-through panel; a translucent fill let the widget's text show inside the boxes.
 - Selected-tab dash on the widget was "randomly" invisible: it used the solid `track` grey, which matched the now see-through panel over light wallpaper (measured ~229 grey on a ~(226,232,245) panel). It's now `ink` at 22 % (30 % dark, `WidgetTokens.tabDash`), a tint that stays darker than the panel whatever shows through. Verified on the emulator over the bright part of the wallpaper.
+
+## Today header alignment (2026-11-22)
+- "Sunday / November" was bottom-aligned with a 6 dp guess, so "November" sat below the numeral. Both now align by `LastBaseline`: the month's baseline is the numeral's baseline (measured on the emulator: both end on the same pixel row).
