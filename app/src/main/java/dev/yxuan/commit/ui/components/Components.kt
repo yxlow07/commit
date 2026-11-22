@@ -602,6 +602,7 @@ fun NavRow(
     minHeight: Dp = Space.rowApp,
     chevron: Boolean = true,
     detailColor: Color? = null,
+    trailingColor: Color? = null,
 ) {
     val c = Commit.colors
     Row(
@@ -613,7 +614,7 @@ fun NavRow(
             if (!detail.isNullOrEmpty()) Text(detail, style = Commit.type.meta, color = detailColor ?: c.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         if (!trailing.isNullOrEmpty()) {
-            Text(trailing, style = trailingStyle.tnum(), color = c.textStrong, modifier = Modifier.padding(start = 12.dp))
+            Text(trailing, style = trailingStyle.tnum(), color = trailingColor ?: c.textStrong, modifier = Modifier.padding(start = 12.dp))
         }
         if (chevron) GlyphIcon(Glyph.Chevron, c.faint, size = 16.dp, stroke = 2.dp, modifier = Modifier.padding(start = 10.dp))
     }

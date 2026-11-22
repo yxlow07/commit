@@ -12,7 +12,7 @@ This document is the visual source of truth for the Android app and widget. It s
 
 ## Design principles
 
-1. **Grey by default, red only for problems.** The interface is greyscale. The single accent, red, means overdue or late and nothing else. Never use it for emphasis or branding.
+1. **Grey by default, red only for problems.** The interface is greyscale. The single accent, red, means overdue or late and nothing else. Never use it for emphasis or branding. Exception: on Today, each commitment row shows its open count in the commitment's own colour and its detail line ("2 overdue", "Nothing open") in `muted` tinted 35 % toward that colour.
 2. **Type does the hierarchy.** One family. Selected = bold ink, unselected = regular grey. No pills, chips, underlines or coloured backgrounds to show selection, except the segmented control in forms.
 3. **One loud element.** Big numbers in a light weight (rest timer, today's date, best set, the selected commitment name). Everything else stays small and quiet.
 4. **Space separates, not lines.** No divider rules between list rows and no cards with shadows. Group with spacing (see section 3).

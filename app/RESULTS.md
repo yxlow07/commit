@@ -664,3 +664,6 @@ Changed (2026-11-22), not yet verified on a device:
 ## Today header alignment (2026-11-22)
 - "Sunday / November" was bottom-aligned with a 6 dp guess, so "November" sat below the numeral. Both now align by `LastBaseline`: the month's baseline is the numeral's baseline (measured on the emulator: both end on the same pixel row).
 - The + button is centred on the header row, which puts it on the numeral's visual centre (measured: 352 vs 352.5 px).
+
+## Commitment colour on Today (2026-11-22)
+- Commitment colours were picked in the dialog but shown nowhere since the design pass (spec: greyscale, red only for late). On Today each row now shows its count in the commitment's colour and its detail line in `muted` lerped 35 % toward it (`NavRow.trailingColor` / `detailColor`). Spec rule 1 notes the exception. Verified on the emulator.

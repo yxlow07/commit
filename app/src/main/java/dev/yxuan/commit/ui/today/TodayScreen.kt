@@ -20,6 +20,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.LastBaseline
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.heading
@@ -202,7 +204,11 @@ fun TodayScreen(
         }
 
         items(state.rows, key = { it.commitment.id }) { row ->
+            // The commitment's colour: in full on the count, a light tint on the detail line.
+            val accent = Color(row.commitment.color)
             NavRow(
+                trailingColor = accent,
+                detailColor = lerp(c.muted, accent, 0.35f),
                 title = row.commitment.name,
                 detail = row.detail,
                 trailing = row.count?.toString(),
