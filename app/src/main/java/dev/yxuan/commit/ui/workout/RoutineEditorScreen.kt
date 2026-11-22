@@ -1,5 +1,15 @@
 package dev.yxuan.commit.ui.workout
 
+import androidx.compose.ui.semantics.customActions
+import dev.yxuan.commit.ui.components.Glyph
+import dev.yxuan.commit.ui.components.GlyphIcon
+import dev.yxuan.commit.ui.components.reorderActions
+import dev.yxuan.commit.ui.components.reorderDrag
+import dev.yxuan.commit.ui.components.reorderLift
+import dev.yxuan.commit.ui.components.ReorderHandle
+import dev.yxuan.commit.ui.components.rememberReorderState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -94,11 +104,20 @@ fun RoutineEditorScreen(
     }
     BackHandler(onBack = saveAndBack)
 
+    // Exercises reorder by dragging their grip, or holding the row (as on Today).
+    val listState = rememberLazyListState()
+    val reorder = rememberReorderState(listState)
+    reorder.sync(exercises.map { it.id })
+    val exById = exercises.associateBy { it.id }
+    val shownExercises = reorder.order.mapNotNull { exById[it] }
+    val exerciseIds = shownExercises.map { it.id }
+    val saveOrder: (List<String>) -> Unit = { viewModel.reorderExercises(it) }
+
     Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
         PushedTopBar(onBack = saveAndBack, backLabel = "Save and go back") {
             TextAction("Delete routine", onClick = { confirmDelete = true }, muted = true)
         }
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(start = Space.screenSide, end = Space.screenSide, top = Space.l, bottom = Space.xxxl)) {
+        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(start = Space.screenSide, end = Space.screenSide, top = Space.l, bottom = Space.xxxl)) {
             item {
                 ScreenTitle(name?.ifBlank { null } ?: "Routine")
                 Spacer(Modifier.height(Space.xxl))
@@ -111,14 +130,23 @@ fun RoutineEditorScreen(
                 SectionHeading("Exercises")
                 if (exercises.isEmpty()) Text("No exercises yet.", style = Commit.type.body, color = c.textStrong, modifier = Modifier.padding(vertical = Space.s))
             }
-            itemsIndexed(exercises, key = { _, e -> e.id }) { index, ex ->
-                Row(Modifier.fillMaxWidth().heightIn(min = Space.rowApp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f).clickable { editing = ex }.padding(vertical = 6.dp)) {
+            items(shownExercises, key = { it.id }) { ex ->
+                Row(
+                    Modifier
+                        .then(if (reorder.dragging == ex.id) Modifier else Modifier.animateItem())
+                        .reorderLift(reorder, ex.id)
+                        .reorderDrag(reorder, ex.id, exerciseIds, saveOrder)
+                        .fillMaxWidth().heightIn(min = Space.rowApp)
+                        .clickable { editing = ex }
+                        .semantics { customActions = reorderActions(ex.id, exerciseIds, saveOrder) },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ReorderHandle(reorder, ex.id, exerciseIds, saveOrder)
+                    Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
                         Text(ex.name, style = Commit.type.body, color = c.ink)
                         Text(describe(ex), style = Commit.type.meta, color = c.muted)
                     }
-                    if (index > 0) TextAction("Up", onClick = { viewModel.moveExercise(ex.id, -1) }, muted = true)
-                    if (index < exercises.lastIndex) TextAction("Down", onClick = { viewModel.moveExercise(ex.id, 1) }, muted = true)
+                    GlyphIcon(Glyph.Chevron, c.faint, size = 16.dp, stroke = 2.dp)
                 }
             }
             item {

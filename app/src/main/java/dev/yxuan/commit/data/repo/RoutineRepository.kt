@@ -113,6 +113,19 @@ class RoutineRepository(
         listener.onDataChanged()
     }
 
+    /** Saves [ids] as the order of [routineId]'s exercises; any not listed follow them. */
+    suspend fun reorderExercises(routineId: String, ids: List<String>) {
+        val all = exercises.getForRoutine(routineId)
+        val byId = all.associateBy { it.id }
+        val ordered = ids.mapNotNull { byId[it] } + all.filter { it.id !in ids }
+        val now = clock.millis()
+        val changed = ordered.mapIndexedNotNull { i, e -> if (e.sortOrder == i) null else e.copy(sortOrder = i, updatedAt = now, dirty = true) }
+        if (changed.isNotEmpty()) {
+            exercises.upsertAll(changed)
+            listener.onDataChanged()
+        }
+    }
+
     suspend fun deleteExercise(id: String) {
         val current = exercises.getById(id) ?: return
         exercises.upsert(current.copy(deleted = true, updatedAt = clock.millis(), dirty = true))

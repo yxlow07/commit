@@ -90,7 +90,7 @@ class RoutineEditorViewModel(
 
     fun saveExercise(id: String?, input: ExerciseInput) = launch { routines.saveExercise(routineId, id, input) }
     fun deleteExercise(id: String) = launch { routines.deleteExercise(id) }
-    fun moveExercise(id: String, delta: Int) = launch { routines.moveExercise(id, delta) }
+    fun reorderExercises(ids: List<String>) = launch { routines.reorderExercises(routineId, ids) }
     fun deleteRoutine() = launch { routines.deleteRoutine(routineId) }
 
     private fun launch(block: suspend () -> Unit) {
