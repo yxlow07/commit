@@ -30,6 +30,13 @@ data class LiveWorkout(
     val isTimed: Boolean get() = (exercise?.durationSeconds ?: 0) > 0
     val volume: Double get() = WorkoutEngine.volume(sets.map { it.reps to it.weight })
 
+    /**
+     * What ends the rest: "Next exercise" after an exercise's last set, otherwise "Next set".
+     * During a rest, setNo is still the set just finished.
+     */
+    val nextLabel: String
+        get() = if (state.setNo >= (exercise?.sets ?: 0)) "Next exercise" else "Next set"
+
     /** The rest has run out and is waiting for "Next set" (shown as red overtime). */
     fun restOver(now: Long): Boolean = state.phase == WorkoutPhase.REST && (state.phaseEndsAt ?: Long.MAX_VALUE) <= now
 

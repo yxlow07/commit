@@ -121,7 +121,7 @@ private fun LiveContent(live: LiveWorkout, vm: LiveWorkoutViewModel, onFinished:
             Text(under, style = t.meta, color = if (over) c.danger else c.muted, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
             Row(Modifier.fillMaxWidth().padding(top = Space.s), horizontalArrangement = Arrangement.spacedBy(Space.s)) {
                 if (over) {
-                    PrimaryButton("Next set", onClick = vm::skip, modifier = Modifier.weight(1f))
+                    PrimaryButton(live.nextLabel, onClick = vm::skip, modifier = Modifier.weight(1f))
                 } else if (s.phase == WorkoutPhase.REST) {
                     SecondaryButton("Add 30 s", onClick = vm::addRest, modifier = Modifier.weight(1f))
                     PrimaryButton("Skip rest", onClick = vm::skip, modifier = Modifier.weight(1f))

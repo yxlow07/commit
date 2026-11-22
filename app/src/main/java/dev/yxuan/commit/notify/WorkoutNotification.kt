@@ -52,7 +52,7 @@ object WorkoutNotification {
                 .setContentTitle("Rest over")
                 .setContentText(WorkoutFormat.nextLine(live) ?: "")
                 .setWhen(s.phaseEndsAt ?: System.currentTimeMillis()).setShowWhen(true).setUsesChronometer(true)
-                .addAction(0, "Next set", NotificationActionReceiver.workout(context, ACTION_WORKOUT_SKIP_REST))
+                .addAction(0, live.nextLabel, NotificationActionReceiver.workout(context, ACTION_WORKOUT_SKIP_REST))
             else builder
                 .setContentTitle("Resting")
                 .setContentText(WorkoutFormat.nextLine(live) ?: "")

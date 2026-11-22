@@ -1,5 +1,8 @@
 package dev.yxuan.commit.domain
 
+import dev.yxuan.commit.data.repo.LiveWorkout
+import dev.yxuan.commit.data.db.entity.ActiveWorkoutEntity
+import dev.yxuan.commit.data.db.entity.RoutineEntity
 import dev.yxuan.commit.data.db.entity.ExerciseEntity
 import dev.yxuan.commit.data.db.entity.WorkoutPhase.COMPLETE
 import dev.yxuan.commit.data.db.entity.WorkoutPhase.READY
@@ -111,6 +114,18 @@ class WorkoutEngineTest {
         assertEquals(2, skipped.setNo)
         // Steppers only change the set being prepared.
         assertEquals(st, engine.adjustReps(st, 1))
+    }
+
+    @Test
+    fun restButtonSaysNextExerciseAfterTheLastSet() {
+        val routine = RoutineEntity(id = "r", updatedAt = 0, commitmentId = "c", name = "Push Day", sortOrder = 0)
+        fun live(st: ActiveWorkoutEntity) = LiveWorkout(st, routine, listOf(bench, plank), emptyList(), t0)
+        var st = engine.start("session", "r", t0)
+        st = engine.primary(st, s(0)).state // bench set 1 done -> rest
+        assertEquals("Next set", live(st).nextLabel)
+        st = engine.primary(engine.skip(st, s(10)).state, s(20)).state // bench set 2 (last) done -> rest
+        assertEquals(REST, st.phase)
+        assertEquals("Next exercise", live(st).nextLabel)
     }
 
     @Test

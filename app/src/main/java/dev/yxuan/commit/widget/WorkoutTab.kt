@@ -188,7 +188,7 @@ private fun Live(live: LiveWorkout) {
                 Spacer(GlanceModifier.height(16.dp))
                 Row(GlanceModifier.fillMaxWidth()) {
                     if (over) {
-                        WidgetButton("Next set", actionRunCallback<SkipAction>(), primary = true, modifier = GlanceModifier.defaultWeight())
+                        WidgetButton(live.nextLabel, actionRunCallback<SkipAction>(), primary = true, modifier = GlanceModifier.defaultWeight())
                     } else if (s.phase == WorkoutPhase.REST) {
                         WidgetButton("Add 30 s", actionRunCallback<AddRestAction>(), primary = false, modifier = GlanceModifier.defaultWeight())
                         Spacer(GlanceModifier.width(8.dp))
@@ -249,7 +249,7 @@ private fun CompactLive(live: LiveWorkout) {
                 Spacer(GlanceModifier.defaultWeight())
                 Row(GlanceModifier.fillMaxWidth()) {
                     if (over) {
-                        WidgetButton("Next set", actionRunCallback<SkipAction>(), primary = true, modifier = GlanceModifier.defaultWeight(), height = 44.dp)
+                        WidgetButton(live.nextLabel, actionRunCallback<SkipAction>(), primary = true, modifier = GlanceModifier.defaultWeight(), height = 44.dp)
                     } else if (resting) {
                         WidgetButton("Add 30 s", actionRunCallback<AddRestAction>(), primary = false, modifier = GlanceModifier.defaultWeight(), height = 44.dp)
                         Spacer(GlanceModifier.width(8.dp))
