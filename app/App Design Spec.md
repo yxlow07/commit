@@ -82,7 +82,7 @@ Build these once and reuse them in the app. The widget needs Glance versions of 
 
 - Due label: `meta`, fixed 56 dp column, left. Title: `body`, `ink`. Optional second line: `meta`, `muted` (recurrence such as "Every 4 days", or a full date in the app).
 - Checkbox on the right, its 44 dp hit area overlapping the row's right padding by 8–10 dp so the circle lines up with the widget's edge.
-- Tapping the title (not the checkbox) opens the todo for editing in the app. In the widget, tapping the title opens the app on that todo.
+- Tapping the title (not the checkbox) opens the todo for editing in the app. In the widget, tapping the title opens a small edit popup over the home screen instead of the app.
 
 ### Due label rules
 
@@ -198,7 +198,7 @@ Use `SizeMode.Responsive` with three layouts:
 | --- | --- | --- |
 | A tab | Switches the list in place | No |
 | Checkbox | Marks done or not done, writes to Room, schedules sync | No |
-| A todo's title | Opens that todo in the app | Yes |
+| A todo's title | Opens a small edit popup over the home screen (the quick-add popup, prefilled, with every field the todo can use and "Delete todo") | Popup only |
 | Add button | Opens the quick-add popup (translucent activity) over the home screen | Popup only |
 
 ### Platform limits (Glance and RemoteViews)

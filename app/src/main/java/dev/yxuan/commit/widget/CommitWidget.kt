@@ -325,7 +325,8 @@ private fun TodoRow(item: TodoItem, row: Int, clock: Clock) {
     Row(GlanceModifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
         Row(
             GlanceModifier.defaultWeight().height(52.dp)
-                .clickable(actionStartActivity<MainActivity>(actionParametersOf(TodoIdParam to todo.id))),
+                // Opens the small edit popup over the home screen, not the full app.
+                .clickable(actionStartActivity<QuickAddActivity>(actionParametersOf(TodoIdParam to todo.id))),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(

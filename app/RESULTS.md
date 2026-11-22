@@ -625,3 +625,5 @@ Checked on the emulator with four commitments: each tab selected in turn (Sync t
 Fixed (2026-11-22): **"Push Day today" with no workouts.** Routines of archived or deleted commitments still counted as planned on Today and in the morning recap (the routine queries ignored the commitment). `RoutineDao.getAll` and `observeSummaries` now join to active commitments only. Seen with the archived test "Gym"; Today now reads "3 overdue." only.
 
 Changed (2026-11-22): History heatmap legend. The sentence "Each square is a day…" is replaced by "N this week" and a Less-to-More gradient bar through the heatmap shades (TalkBack still reads the count and what the shades mean).
+
+Changed (2026-11-22): **Widget todo tap opens a small edit popup** over the home screen instead of the full app: the quick-add popup in edit mode (prefilled, full fields including weekday repeat and reminder lead time, "Delete todo"; no keyboard until you tap a field). A later "Add" starts empty. Checked on the emulator: edit "M10 weekday chore" from the widget (Mon, Thu shown), Save returns to the home screen; Add opens a fresh popup.
