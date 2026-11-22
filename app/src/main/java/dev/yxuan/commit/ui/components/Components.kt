@@ -83,7 +83,7 @@ import dev.yxuan.commit.ui.theme.tnum
 
 // ---- Icons (thin strokes, drawn so they follow the tokens) ----
 
-enum class Glyph { Back, Chevron, Plus, Minus, Tick, Close, Trash, Pencil }
+enum class Glyph { Back, Chevron, Plus, Minus, Tick, Close, Trash, Pencil, Grip }
 
 @Composable
 fun GlyphIcon(glyph: Glyph, color: Color, size: Dp = 20.dp, stroke: Dp = 1.8.dp, modifier: Modifier = Modifier) {
@@ -108,6 +108,12 @@ fun GlyphIcon(glyph: Glyph, color: Color, size: Dp = 20.dp, stroke: Dp = 1.8.dp,
                 drawPath(p(6f to 6.5f, 7f to 20f, 17f to 20f, 18f to 6.5f), color, style = s)
                 drawLine(color, Offset(10 * w / 24, 10 * w / 24), Offset(10 * w / 24, 16.5f * w / 24), s.width, StrokeCap.Round)
                 drawLine(color, Offset(14 * w / 24, 10 * w / 24), Offset(14 * w / 24, 16.5f * w / 24), s.width, StrokeCap.Round)
+            }
+            Glyph.Grip -> {
+                // Drag handle: two columns of three dots.
+                for (x in listOf(9f, 15f)) for (y in listOf(6.5f, 12f, 17.5f)) {
+                    drawCircle(color, radius = 1.7f * w / 24, center = Offset(x * w / 24, y * w / 24))
+                }
             }
             Glyph.Pencil -> {
                 // Pencil at 45 degrees: body from the tip (bottom left) to the top right, and the band
@@ -636,12 +642,14 @@ fun NavRow(
     chevron: Boolean = true,
     detailColor: Color? = null,
     trailingColor: Color? = null,
+    leading: (@Composable () -> Unit)? = null,
 ) {
     val c = Commit.colors
     Row(
         modifier.fillMaxWidth().heightIn(min = minHeight).clickable(onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        leading?.invoke()
         Column(Modifier.weight(1f).padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(title, style = titleStyle, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (!detail.isNullOrEmpty()) Text(detail, style = Commit.type.meta, color = detailColor ?: c.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)

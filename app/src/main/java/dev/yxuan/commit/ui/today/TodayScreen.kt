@@ -1,5 +1,10 @@
 package dev.yxuan.commit.ui.today
 
+import dev.yxuan.commit.ui.components.SectionHeading
+import dev.yxuan.commit.ui.components.GlyphIcon
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -8,6 +13,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.zIndex
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -200,6 +206,35 @@ fun TodayScreen(
     if (dragging == null && order.toList() != rowIds) { order.clear(); order.addAll(rowIds) }
     val rowsById = state.rows.associateBy { it.commitment.id }
     val shownRows = order.mapNotNull { rowsById[it] }
+    var pendingFrom by remember { mutableStateOf<Int?>(null) }
+    var orderAtStart by remember { mutableStateOf<List<String>>(emptyList()) }
+    fun startDrag(id: String) {
+        dragging = id
+        dragOffset = 0f
+        orderAtStart = order.toList()
+        pendingFrom = null
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+    }
+    /** Moves the dragged row by [dy]; it swaps places only with rows of its own group. */
+    fun dragBy(id: String, dy: Float, groupIds: List<String>) {
+        dragOffset += dy
+        val visible = listState.layoutInfo.visibleItemsInfo
+        val self = visible.firstOrNull { it.key == id } ?: return
+        // After a swap, wait until the list has laid the row out in its new place.
+        if (pendingFrom != null) { if (self.offset == pendingFrom) return else pendingFrom = null }
+        val centre = (self.offset + dragOffset + self.size / 2f).toInt()
+        val target = visible.firstOrNull { it.key != id && it.key in groupIds && centre in it.offset until it.offset + it.size } ?: return
+        order.add(order.indexOf(target.key as String), order.removeAt(order.indexOf(id)))
+        // The row now sits where the target was; keep it under the finger.
+        dragOffset -= (target.offset - self.offset)
+        pendingFrom = self.offset
+        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+    }
+    fun endDrag() {
+        if (dragging != null && order.toList() != orderAtStart) viewModel.reorder(order.toList())
+        dragging = null
+        dragOffset = 0f
+    }
 
     LazyColumn(modifier.fillMaxSize(), state = listState, contentPadding = dev.yxuan.commit.ui.components.ScreenPadding) {
         item {
@@ -235,71 +270,81 @@ fun TodayScreen(
             }
         }
 
-        if (state.rows.isNotEmpty()) {
+        // Todo commitments first, then workout commitments under their own heading. Each group is
+        // reordered on its own: drag by the handle, or hold anywhere on the row.
+        val todoRows = shownRows.filter { it.commitment.type != CommitmentType.WORKOUT }
+        val workoutRows = shownRows.filter { it.commitment.type == CommitmentType.WORKOUT }
+
+        fun group(rows: List<TodayRow>) {
+            val groupIds = rows.map { it.commitment.id }
+            items(rows, key = { it.commitment.id }) { row ->
+                val accent = Color(row.commitment.color)
+                val id = row.commitment.id
+                val lifted = dragging == id
+                // The drag handlers live across reorders (restarting them would drop the drag), so
+                // they read the group's current members through this.
+                val currentGroup by rememberUpdatedState(groupIds)
+                NavRow(
+                    leading = {
+                        // The handle: drag straight away, no hold needed.
+                        Box(
+                            Modifier
+                                .size(width = 28.dp, height = 44.dp)
+                                .pointerInput(id) {
+                                    detectDragGestures(
+                                        onDragStart = { startDrag(id) },
+                                        onDrag = { change, amount -> change.consume(); dragBy(id, amount.y, currentGroup) },
+                                        onDragEnd = { endDrag() },
+                                        onDragCancel = { endDrag() },
+                                    )
+                                },
+                            contentAlignment = Alignment.CenterStart,
+                        ) {
+                            GlyphIcon(Glyph.Grip, c.faint, size = 16.dp)
+                        }
+                    },
+                    trailingColor = accent,
+                    detailColor = lerp(c.muted, accent, 0.35f),
+                    title = row.commitment.name,
+                    detail = row.detail,
+                    trailing = row.count?.toString(),
+                    titleStyle = t.titleDialog.copy(fontWeight = FontWeight.Medium),
+                    trailingStyle = t.tabSelected.tnum(),
+                    minHeight = 64.dp,
+                    onClick = { if (row.commitment.type == CommitmentType.WORKOUT) onOpenWorkouts() else onOpenCommitment(row.commitment.id) },
+                    modifier = Modifier
+                        .then(if (lifted) Modifier.zIndex(1f) else Modifier.animateItem())
+                        .graphicsLayer {
+                            translationY = if (lifted) dragOffset else 0f
+                            if (lifted) { scaleX = 1.02f; scaleY = 1.02f }
+                        }
+                        .then(if (lifted) Modifier.shadow(8.dp, RoundedCornerShape(Commit.shapes.button)).background(c.surface, RoundedCornerShape(Commit.shapes.button)) else Modifier)
+                        .pointerInput(id) {
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = { startDrag(id) },
+                                onDrag = { change, amount -> change.consume(); dragBy(id, amount.y, currentGroup) },
+                                onDragEnd = { endDrag() },
+                                onDragCancel = { endDrag() },
+                            )
+                        }
+                        .padding(bottom = Space.xs)
+                        .semantics { customActions = moveActions(id, groupIds) { viewModel.reorder(mergeGroup(order, it)) } },
+                )
+            }
+        }
+
+        if (todoRows.isNotEmpty()) {
             item(key = "commitments-header") {
                 SectionHeader("Commitments", Glyph.Plus, "New commitment", onAction = { creating = true })
             }
+            group(todoRows)
         }
-
-        items(shownRows, key = { it.commitment.id }) { row ->
-            // The commitment's colour: in full on the count, a light tint on the detail line.
-            val accent = Color(row.commitment.color)
-            val id = row.commitment.id
-            val lifted = dragging == id
-            val reorder = Modifier.pointerInput(id) {
-                detectDragGesturesAfterLongPress(
-                    onDragStart = {
-                        dragging = id
-                        dragOffset = 0f
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    },
-                    onDrag = { change, amount ->
-                        change.consume()
-                        dragOffset += amount.y
-                        val visible = listState.layoutInfo.visibleItemsInfo
-                        val self = visible.firstOrNull { it.key == id } ?: return@detectDragGesturesAfterLongPress
-                        val centre = self.offset + dragOffset + self.size / 2f
-                        val target = visible.firstOrNull { it.key != id && it.key in order && centre.toInt() in it.offset until it.offset + it.size }
-                        if (target != null) {
-                            val from = order.indexOf(id)
-                            val to = order.indexOf(target.key as String)
-                            order.add(to, order.removeAt(from))
-                            // The row now sits where the target was; keep it under the finger.
-                            dragOffset -= (target.offset - self.offset)
-                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        }
-                    },
-                    onDragEnd = {
-                        if (order.toList() != rowIds) viewModel.reorder(order.toList())
-                        dragging = null
-                        dragOffset = 0f
-                    },
-                    onDragCancel = { dragging = null; dragOffset = 0f },
-                )
+        if (workoutRows.isNotEmpty()) {
+            item(key = "workouts-header") {
+                SectionHeading("Workouts", Modifier.padding(top = if (todoRows.isEmpty()) 0.dp else Space.huge))
             }
-            NavRow(
-                trailingColor = accent,
-                detailColor = lerp(c.muted, accent, 0.35f),
-                title = row.commitment.name,
-                detail = row.detail,
-                trailing = row.count?.toString(),
-                titleStyle = t.titleDialog.copy(fontWeight = FontWeight.Medium),
-                trailingStyle = t.tabSelected.tnum(),
-                minHeight = 64.dp,
-                onClick = { if (row.commitment.type == CommitmentType.WORKOUT) onOpenWorkouts() else onOpenCommitment(row.commitment.id) },
-                modifier = Modifier
-                    .then(if (lifted) Modifier.zIndex(1f) else Modifier.animateItem())
-                    .graphicsLayer {
-                        translationY = if (lifted) dragOffset else 0f
-                        if (lifted) { scaleX = 1.02f; scaleY = 1.02f }
-                    }
-                    .then(if (lifted) Modifier.shadow(8.dp, RoundedCornerShape(Commit.shapes.button)).background(c.surface, RoundedCornerShape(Commit.shapes.button)) else Modifier)
-                    .then(reorder)
-                    .padding(bottom = Space.xs)
-                    .semantics { customActions = moveActions(id, order) { viewModel.reorder(it) } },
-            )
+            group(workoutRows)
         }
-
     }
 
     if (creating) {
@@ -319,4 +364,11 @@ private fun moveActions(id: String, order: List<String>, save: (List<String>) ->
         if (i > 0) CustomAccessibilityAction("Move up") { save(moved(i - 1)); true } else null,
         if (i in 0 until order.size - 1) CustomAccessibilityAction("Move down") { save(moved(i + 1)); true } else null,
     )
+}
+
+/** [order] with the members of one group put in [groupOrder]'s sequence, in the slots they held. */
+private fun mergeGroup(order: List<String>, groupOrder: List<String>): List<String> {
+    val members = groupOrder.toSet()
+    val next = groupOrder.iterator()
+    return order.map { if (it in members) next.next() else it }
 }
