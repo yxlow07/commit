@@ -259,7 +259,7 @@ private fun SetProgress(setNo: Int, total: Int) {
 
 /**
  * Time since the workout started, counting up on its own (a system Chronometer, no widget updates):
- * [big] is the full panel's 32 sp headline, otherwise a 13 sp label for the compact panel.
+ * [big] is the full panel's 48 sp headline, otherwise a 13 sp label for the compact panel.
  */
 @Composable
 private fun Elapsed(startedAt: Long, big: Boolean = false) {
@@ -270,7 +270,7 @@ private fun Elapsed(startedAt: Long, big: Boolean = false) {
         setTextColor(R.id.chronometer, (if (big) c.ink else c.muted).getColor(context).toArgb())
     }
     // Fixed width: a RemoteViews child otherwise stretches and pushes the exercise name out.
-    val size = if (big) GlanceModifier.width(120.dp).height(40.dp) else GlanceModifier.width(56.dp).height(16.dp)
+    val size = if (big) GlanceModifier.width(170.dp).height(56.dp) else GlanceModifier.width(56.dp).height(16.dp)
     AndroidRemoteViews(views, modifier = size.semantics { contentDescription = "Workout time" })
 }
 

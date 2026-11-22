@@ -10,4 +10,4 @@
     android:gravity="end|center_vertical"
     android:includeFontPadding="false"
     android:letterSpacing="-0.02"
-    android:textSize="32sp" />
+    android:textSize="48sp" />
