@@ -83,7 +83,7 @@ import dev.yxuan.commit.ui.theme.tnum
 
 // ---- Icons (thin strokes, drawn so they follow the tokens) ----
 
-enum class Glyph { Back, Chevron, Plus, Minus, Tick, Close, Trash }
+enum class Glyph { Back, Chevron, Plus, Minus, Tick, Close, Trash, Pencil }
 
 @Composable
 fun GlyphIcon(glyph: Glyph, color: Color, size: Dp = 20.dp, stroke: Dp = 1.8.dp, modifier: Modifier = Modifier) {
@@ -108,6 +108,12 @@ fun GlyphIcon(glyph: Glyph, color: Color, size: Dp = 20.dp, stroke: Dp = 1.8.dp,
                 drawPath(p(6f to 6.5f, 7f to 20f, 17f to 20f, 18f to 6.5f), color, style = s)
                 drawLine(color, Offset(10 * w / 24, 10 * w / 24), Offset(10 * w / 24, 16.5f * w / 24), s.width, StrokeCap.Round)
                 drawLine(color, Offset(14 * w / 24, 10 * w / 24), Offset(14 * w / 24, 16.5f * w / 24), s.width, StrokeCap.Round)
+            }
+            Glyph.Pencil -> {
+                // Pencil at 45 degrees: body from the tip (bottom left) to the top right, and the band
+                // where the eraser meets the body.
+                drawPath(p(4f to 20f, 4.6f to 15.8f, 15f to 5.4f, 18.6f to 9f, 8.2f to 19.4f).apply { close() }, color, style = s)
+                drawLine(color, Offset(12.6f * w / 24, 7.8f * w / 24), Offset(16.2f * w / 24, 11.4f * w / 24), s.width, StrokeCap.Round)
             }
             Glyph.Close -> {
                 drawLine(color, Offset(6 * w / 24, 6 * w / 24), Offset(18 * w / 24, 18 * w / 24), s.width, StrokeCap.Round)
@@ -285,7 +291,7 @@ fun DeleteIconButton(onClick: () -> Unit, contentDescription: String, modifier: 
 
 /** A 44 dp icon button (back arrow, close). */
 @Composable
-fun IconAction(glyph: Glyph, contentDescription: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun IconAction(glyph: Glyph, contentDescription: String, onClick: () -> Unit, modifier: Modifier = Modifier, tint: Color? = null, glyphSize: Dp = 22.dp) {
     Box(
         modifier
             .size(Space.touch)
@@ -294,7 +300,20 @@ fun IconAction(glyph: Glyph, contentDescription: String, onClick: () -> Unit, mo
             .semantics { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center,
     ) {
-        GlyphIcon(glyph, Commit.colors.ink, size = 22.dp)
+        GlyphIcon(glyph, tint ?: Commit.colors.ink, size = glyphSize)
+    }
+}
+
+/**
+ * A list's heading with one small action on the right (+ to add, pencil to edit): the caption on
+ * the left, a muted 18 dp glyph whose 44 dp touch area overhangs the right edge so the glyph lines
+ * up with the rows' chevrons.
+ */
+@Composable
+fun SectionHeader(text: String, glyph: Glyph, actionLabel: String, onAction: () -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(text, style = Commit.type.caption, color = Commit.colors.muted, modifier = Modifier.weight(1f).semantics { heading() })
+        IconAction(glyph, actionLabel, onAction, tint = Commit.colors.muted, glyphSize = 18.dp, modifier = Modifier.offset(x = 13.dp))
     }
 }
 
@@ -544,7 +563,10 @@ fun SectionHeading(text: String, modifier: Modifier = Modifier, danger: Boolean 
     )
 }
 
-/** Text tabs: selected Bold `ink`, others Regular `muted`; exposes Tab role and selected state. */
+/**
+ * Text tabs: selected Bold `ink`, others Regular `muted`; exposes Tab role and selected state.
+ * [dash]: a short, faint dash centred under the selected tab (as on the widget's commitment tabs).
+ */
 @Composable
 fun TextTabs(
     items: List<String>,
@@ -553,6 +575,7 @@ fun TextTabs(
     modifier: Modifier = Modifier,
     style: TextStyle = Commit.type.label.copy(fontSize = 16.sp),
     gap: Dp = 22.dp,
+    dash: Boolean = false,
 ) {
     val c = Commit.colors
     Row(modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.CenterVertically) {
@@ -564,7 +587,17 @@ fun TextTabs(
                     .selectable(selected = on, role = Role.Tab, onClick = { onSelect(i) }),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(label, style = style.copy(fontWeight = if (on) FontWeight.Bold else FontWeight.Normal), color = if (on) c.ink else c.muted, maxLines = 1)
+                if (dash) {
+                    // Every tab keeps the dash's room so the labels stay on one line; only the
+                    // selected one draws it.
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(label, style = style.copy(fontWeight = if (on) FontWeight.Bold else FontWeight.Normal), color = if (on) c.ink else c.muted, maxLines = 1)
+                        Spacer(Modifier.height(4.dp))
+                        Box(Modifier.width(18.dp).height(2.dp).clip(RoundedCornerShape(1.dp)).background(if (on) c.ink.copy(alpha = if (c.isDark) 0.3f else 0.22f) else Color.Transparent))
+                    }
+                } else {
+                    Text(label, style = style.copy(fontWeight = if (on) FontWeight.Bold else FontWeight.Normal), color = if (on) c.ink else c.muted, maxLines = 1)
+                }
             }
         }
     }

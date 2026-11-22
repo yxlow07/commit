@@ -25,6 +25,9 @@ object SettingsRoute
 object ThemeRoute
 
 @Serializable
+object ArchivedRoute
+
+@Serializable
 object HistoryRoute
 
 @Serializable

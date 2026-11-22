@@ -88,7 +88,7 @@ fun HistoryScreen(
         item {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
                 ScreenTitle("History", Modifier.weight(1f))
-                TextTabs(listOf("Tasks", "Workouts"), tab, { tab = it }, style = Commit.type.label, gap = 18.dp)
+                TextTabs(listOf("Tasks", "Workouts"), tab, { tab = it }, style = Commit.type.label, gap = 18.dp, dash = true)
             }
             Spacer(Modifier.height(Space.l))
         }
@@ -122,8 +122,10 @@ private fun LazyListScope.tasks(rows: List<CompletionRow>, filter: String?, onFi
     val streaks = Stats.currentStreaks(rows, clock)
     // The streak note goes on each chore's latest completion only.
     val latestPerChore = rows.filter { it.todoId in streaks }.groupBy { it.todoId }.mapValues { (_, l) -> l.maxOf { it.doneAt } }
-    shown.sortedByDescending { it.doneAt }.groupBy { it.doneAt.day(clock) }.forEach { (day, list) ->
-        item(key = "d$day") { SectionHeading(dayHeading(day, clock), Modifier.padding(top = Space.s)) }
+    // Days are separated by space, not lines (the app draws no dividers): a wide gap above every
+    // day after the first makes each day read as its own group.
+    shown.sortedByDescending { it.doneAt }.groupBy { it.doneAt.day(clock) }.entries.forEachIndexed { i, (day, list) ->
+        item(key = "d$day") { SectionHeading(dayHeading(day, clock), Modifier.padding(top = if (i == 0) Space.s else Space.xxxl)) }
         items(list, key = { it.completionId }) { r ->
             val lateDays = late[r.completionId]
             val note = when {

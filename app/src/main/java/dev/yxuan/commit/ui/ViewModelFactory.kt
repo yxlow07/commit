@@ -1,5 +1,6 @@
 package dev.yxuan.commit.ui
 
+import dev.yxuan.commit.ui.settings.ArchivedViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.createSavedStateHandle
@@ -35,8 +36,9 @@ val AppViewModelFactory: ViewModelProvider.Factory = viewModelFactory {
     initializer { WorkoutsViewModel(container.commitmentRepository, container.routineRepository, container.workoutRepository) }
     initializer { RoutineEditorViewModel(createSavedStateHandle(), container.routineRepository) }
     initializer { LiveWorkoutViewModel(container.workoutRepository) }
-    initializer { SettingsViewModel(container.settingsRepository, container.themeRepository) }
+    initializer { SettingsViewModel(container.settingsRepository, container.themeRepository, container.commitmentRepository) }
     initializer { ThemeViewModel(container.themeRepository) }
+    initializer { ArchivedViewModel(container.commitmentRepository) }
     initializer { HistoryViewModel(container.historyRepository, container.clock) }
     initializer { SessionDetailViewModel(createSavedStateHandle(), container.historyRepository) }
     initializer { RecapViewModel(createSavedStateHandle(), container.recapRepository) }

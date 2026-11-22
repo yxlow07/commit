@@ -15,6 +15,10 @@ interface CommitmentDao {
     @Query("SELECT * FROM commitments WHERE deleted = 0 AND archived = 0 ORDER BY sort_order, name")
     suspend fun getActive(): List<CommitmentEntity>
 
+    /** Archived (not deleted) commitments, most recently changed first. */
+    @Query("SELECT * FROM commitments WHERE deleted = 0 AND archived = 1 ORDER BY updated_at DESC")
+    fun observeArchived(): Flow<List<CommitmentEntity>>
+
     /** Commitments that appear as widget tabs (F3.1, F1.3). */
     @Query(
         "SELECT * FROM commitments WHERE deleted = 0 AND archived = 0 AND show_in_widget = 1 " +

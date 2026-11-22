@@ -1,5 +1,7 @@
 package dev.yxuan.commit
 
+import dev.yxuan.commit.ui.settings.ArchivedScreen
+import dev.yxuan.commit.ui.ArchivedRoute
 import android.Manifest
 import android.content.Intent
 import android.os.Bundle
@@ -187,11 +189,14 @@ private fun CommitNavHost(pendingRoute: Any?, onRouteOpened: () -> Unit) {
         }
         composable<SettingsRoute> {
             TabShell(NavTab.Settings, goTab) { m ->
-                SettingsScreen(onOpenTheme = { nav.navigate(ThemeRoute) }, accountSection = { AccountSection() }, modifier = m)
+                SettingsScreen(onOpenTheme = { nav.navigate(ThemeRoute) }, onOpenArchived = { nav.navigate(ArchivedRoute) }, accountSection = { AccountSection() }, modifier = m)
             }
         }
         composable<ThemeRoute> {
             TabShell(NavTab.Settings, goTab) { m -> ThemeScreen(onBack = { nav.popBackStack() }, modifier = m) }
+        }
+        composable<ArchivedRoute> {
+            TabShell(NavTab.Settings, goTab) { m -> ArchivedScreen(onBack = { nav.popBackStack() }, modifier = m) }
         }
         composable<RecapRoute> {
             TabShell(NavTab.Today, goTab) { m -> RecapScreen(onBack = { nav.popBackStack() }, modifier = m) }

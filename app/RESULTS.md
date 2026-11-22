@@ -668,3 +668,11 @@ Changed (2026-11-22), not yet verified on a device:
 ## Commitment colour on Today (2026-11-22)
 - Commitment colours were picked in the dialog but shown nowhere since the design pass (spec: greyscale, red only for late). On Today each row now shows its count in the commitment's colour and its detail line in `muted` lerped 35 % toward it (`NavRow.trailingColor` / `detailColor`). Spec rule 1 notes the exception. Verified on the emulator.
 - Commitment page: the wide "Add to X" button is now the round + (`PrimaryRoundButton`, as on Today), bottom right; "Add to X" stays as its screen-reader label.
+
+## Archived screen, icons, tab dashes, Workouts like Today (2026-11-22)
+- Settings > Commitments > Archived lists archived commitments with Restore (`ArchivedScreen`, `CommitmentDao.observeArchived`, `CommitmentRepository.restore`; restored ones go to the end of the list). The Settings row shows the count.
+- Commitment page: Edit is a pencil icon (`Glyph.Pencil`). Open / Done and History's Tasks / Workouts get the widget's short dash under the selected tab (`TextTabs(dash = true)`, `ink` at 22 %).
+- History: 36 dp above every day heading after the first, so days read as groups. Space, not lines: the app draws no dividers.
+- Today: "New commitment" moved from a loose text link under the list to a small + on a "Commitments" heading above it (`SectionHeader`), lined up with the chevrons.
+- Workouts laid out like Today: title with the round + (new routine; the dialog picks the commitment when there are several), a summary line ("Push Day planned today."), each workout commitment as a captioned group with a pencil to edit it, routine rows in Today's row style with the detail tinted and Start in the commitment's colour.
+- Verified on the emulator. Unit tests pass.

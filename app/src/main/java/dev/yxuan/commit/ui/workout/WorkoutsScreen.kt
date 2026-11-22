@@ -1,5 +1,14 @@
 package dev.yxuan.commit.ui.workout
 
+import dev.yxuan.commit.ui.components.SegmentedControl
+import dev.yxuan.commit.ui.components.GlyphIcon
+import dev.yxuan.commit.ui.components.Glyph
+import dev.yxuan.commit.ui.components.SectionHeader
+import dev.yxuan.commit.ui.components.PrimaryRoundButton
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -64,10 +73,26 @@ fun WorkoutsScreen(
     var editingId by remember { mutableStateOf<String?>(null) }
     val today = LocalDate.now()
 
+    // Laid out like Today: title with the round + (new routine), a one-line summary, then each
+    // workout commitment as a captioned group (pencil to edit it) of rows in Today's row style.
+    val plannedToday = routines.filter { Weekdays.isPlanned(it.routine.plannedDays, today) }.map { it.routine.name }
+    val summary = when {
+        live != null -> "${live!!.routine.name} in progress."
+        plannedToday.isNotEmpty() -> plannedToday.joinToString(", ") + " planned today."
+        routines.isNotEmpty() -> "Nothing planned today."
+        else -> null
+    }
+
     LazyColumn(modifier.fillMaxSize(), contentPadding = ScreenPadding) {
         item {
-            ScreenTitle("Workouts")
-            Spacer(Modifier.height(Space.xxl))
+            Column(verticalArrangement = Arrangement.spacedBy(Space.l)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    ScreenTitle("Workouts", Modifier.weight(1f))
+                    if (!owners.isNullOrEmpty()) PrimaryRoundButton(onClick = { naming = true }, contentDescription = "New routine")
+                }
+                if (summary != null) Text(summary, style = Commit.type.bodyL, color = c.textStrong, modifier = Modifier.widthIn(max = 300.dp))
+            }
+            Spacer(Modifier.height(Space.xxxl))
         }
         live?.let { l ->
             item {
@@ -78,8 +103,8 @@ fun WorkoutsScreen(
                     ex != null -> "${ex.name}, set ${l.state.setNo} of ${ex.sets}"
                     else -> ""
                 }
-                NavRow(title = l.routine.name, detail = detail, onClick = onOpenLive)
-                Spacer(Modifier.height(Space.section))
+                NavRow(title = l.routine.name, detail = detail, onClick = onOpenLive, titleStyle = Commit.type.titleDialog.copy(fontWeight = FontWeight.Medium), minHeight = 64.dp)
+                Spacer(Modifier.height(Space.xxl))
             }
         }
         if (owners != null && owners!!.isEmpty()) {
@@ -89,31 +114,36 @@ fun WorkoutsScreen(
                     PrimaryButton("New workout commitment", onClick = { newCommitment = true })
                 }
             }
-        } else if (owners != null) {
-            if (routines.isNotEmpty()) item { SectionHeading("Routines") }
-            items(routines, key = { it.routine.id }) { r ->
+        }
+        owners.orEmpty().forEachIndexed { i, owner ->
+            val accent = Color(owner.color)
+            val own = routines.filter { it.routine.commitmentId == owner.id }
+            item(key = "h-${owner.id}") {
+                SectionHeader(owner.name, Glyph.Pencil, "Edit ${owner.name}", onAction = { editingId = owner.id }, modifier = Modifier.padding(top = if (i == 0) 0.dp else Space.xxl))
+            }
+            if (own.isEmpty()) {
+                item(key = "e-${owner.id}") {
+                    Text("No routines yet. Add one with +.", style = Commit.type.body, color = c.textStrong, modifier = Modifier.padding(vertical = Space.s))
+                }
+            }
+            items(own, key = { it.routine.id }) { r ->
                 val planned = Weekdays.isPlanned(r.routine.plannedDays, today)
                 val parts = listOfNotNull(
                     if (r.exerciseCount == 1) "1 exercise" else "${r.exerciseCount} exercises",
                     Weekdays.label(r.routine.plannedDays).ifEmpty { null },
                     if (planned) "planned today" else null,
                 )
-                Row(Modifier.fillMaxWidth().heightIn(min = Space.rowApp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f).clickable { onOpenRoutine(r.routine.id) }.padding(vertical = 6.dp)) {
-                        Text(r.routine.name, style = Commit.type.body, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(parts.joinToString(", "), style = Commit.type.meta, color = c.muted)
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(bottom = Space.xs).clickable { onOpenRoutine(r.routine.id) },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f).padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(r.routine.name, style = Commit.type.titleDialog.copy(fontWeight = FontWeight.Medium), color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(parts.joinToString(", "), style = Commit.type.meta, color = lerp(c.muted, accent, 0.35f), maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
-                    if (live == null && r.exerciseCount > 0) {
-                        TextAction("Start", onClick = { viewModel.start(r.routine.id, onOpenLive) })
-                    }
-                }
-            }
-            item {
-                Column(Modifier.padding(top = Space.s).offset(x = (-12).dp)) {
-                    TextAction("New routine", onClick = { naming = true }, muted = true)
-                    owners.orEmpty().forEach { owner ->
-                        TextAction("Edit ${owner.name}", onClick = { editingId = owner.id }, muted = true)
-                    }
+                    // Start in the commitment's colour, like Today's counts.
+                    if (live == null && r.exerciseCount > 0) TextAction("Start", onClick = { viewModel.start(r.routine.id, onOpenLive) }, color = accent)
+                    GlyphIcon(Glyph.Chevron, c.faint, size = 16.dp, stroke = 2.dp, modifier = Modifier.padding(start = 6.dp))
                 }
             }
         }
@@ -130,19 +160,24 @@ fun WorkoutsScreen(
     }
     if (naming) {
         var name by remember { mutableStateOf("") }
+        var ownerId by remember { mutableStateOf(owners?.firstOrNull()?.id) }
         CommitDialog(
             title = "New routine",
             onDismiss = { naming = false },
             actions = {
                 TextAction("Cancel", onClick = { naming = false })
                 PrimaryButton("Add routine", enabled = name.isNotBlank(), onClick = {
-                    val owner = owners?.firstOrNull() ?: return@PrimaryButton
+                    val owner = owners?.firstOrNull { it.id == ownerId } ?: owners?.firstOrNull() ?: return@PrimaryButton
                     viewModel.create(owner.id, name.trim()) { onOpenRoutine(it) }
                     naming = false
                 })
             },
         ) {
             CommitTextField(name, { name = it }, label = "Name", keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words))
+            val list = owners.orEmpty()
+            if (list.size > 1) {
+                SegmentedControl(list.map { it.id }, ownerId, { ownerId = it }, label = { id -> list.first { it.id == id }.name }, scrollable = true)
+            }
         }
     }
     if (newCommitment) {

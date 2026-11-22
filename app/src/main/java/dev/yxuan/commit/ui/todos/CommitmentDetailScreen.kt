@@ -1,5 +1,7 @@
 package dev.yxuan.commit.ui.todos
 
+import dev.yxuan.commit.ui.components.Glyph
+import dev.yxuan.commit.ui.components.IconAction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -97,13 +99,13 @@ fun CommitmentDetailScreen(
         LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 120.dp)) {
             item {
                 PushedTopBar(onBack = onBack, backLabel = "Back to Today") {
-                    TextAction("Edit", onClick = { editing = true })
+                    IconAction(Glyph.Pencil, "Edit $name", onClick = { editing = true })
                 }
                 Column(Modifier.padding(horizontal = Space.screenSide).padding(top = Space.l), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
                     ScreenTitle(name)
                     Text(subtitle, style = Commit.type.meta, color = c.muted)
                 }
-                TextTabs(listOf("Open", "Done"), tab, { tab = it }, modifier = Modifier.padding(horizontal = Space.screenSide).padding(top = Space.l))
+                TextTabs(listOf("Open", "Done"), tab, { tab = it }, dash = true, modifier = Modifier.padding(horizontal = Space.screenSide).padding(top = Space.l))
                 Spacer(Modifier.height(Space.s))
             }
             if (openList != null && sections.isEmpty()) {

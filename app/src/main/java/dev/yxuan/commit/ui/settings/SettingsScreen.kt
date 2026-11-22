@@ -1,5 +1,7 @@
 package dev.yxuan.commit.ui.settings
 
+import kotlinx.coroutines.flow.map
+import dev.yxuan.commit.data.repo.CommitmentRepository
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -48,7 +50,11 @@ import java.time.LocalTime
 class SettingsViewModel(
     private val repo: SettingsRepository,
     themeRepo: ThemeRepository,
+    commitmentRepo: CommitmentRepository,
 ) : ViewModel() {
+    val archivedCount: StateFlow<Int> =
+        commitmentRepo.observeArchived().map { it.size }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
     val settings: StateFlow<SettingsEntity?> =
         repo.observe().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
@@ -64,12 +70,14 @@ class SettingsViewModel(
 @Composable
 fun SettingsScreen(
     onOpenTheme: () -> Unit,
+    onOpenArchived: () -> Unit,
     modifier: Modifier = Modifier,
     accountSection: @Composable () -> Unit = {},
     viewModel: SettingsViewModel = viewModel(factory = AppViewModelFactory),
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val activeTheme by viewModel.activeTheme.collectAsStateWithLifecycle()
+    val archivedCount by viewModel.archivedCount.collectAsStateWithLifecycle()
     var editing by rememberSaveable { mutableStateOf<String?>(null) }
     val c = Commit.colors
 
@@ -111,6 +119,10 @@ fun SettingsScreen(
         Spacer(Modifier.height(Space.section))
         SectionHeading("Appearance")
         NavRow(title = "Themes", trailing = activeTheme.spec.name, onClick = onOpenTheme)
+
+        Spacer(Modifier.height(Space.section))
+        SectionHeading("Commitments")
+        NavRow(title = "Archived", trailing = archivedCount.takeIf { it > 0 }?.toString(), onClick = onOpenArchived)
 
         Spacer(Modifier.height(Space.section))
         accountSection()

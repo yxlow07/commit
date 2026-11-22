@@ -41,6 +41,14 @@ class CommitmentRepository(
 
     suspend fun archive(id: String) = edit(id) { it.copy(archived = true) }
 
+    fun observeArchived(): Flow<List<CommitmentEntity>> = dao.observeArchived()
+
+    /** Brings an archived commitment back, at the end of the list. */
+    suspend fun restore(id: String) {
+        val last = dao.maxSortOrder()
+        edit(id) { it.copy(archived = false, sortOrder = last + 1) }
+    }
+
     /** Moves a commitment up (delta = -1) or down (delta = +1) and renumbers the rest. */
     suspend fun move(id: String, delta: Int) {
         val list = dao.getActive().toMutableList()

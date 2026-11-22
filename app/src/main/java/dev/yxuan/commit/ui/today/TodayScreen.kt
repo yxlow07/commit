@@ -1,5 +1,7 @@
 package dev.yxuan.commit.ui.today
 
+import dev.yxuan.commit.ui.components.Glyph
+import dev.yxuan.commit.ui.components.SectionHeader
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -203,6 +205,12 @@ fun TodayScreen(
             }
         }
 
+        if (state.rows.isNotEmpty()) {
+            item(key = "commitments-header") {
+                SectionHeader("Commitments", Glyph.Plus, "New commitment", onAction = { creating = true })
+            }
+        }
+
         items(state.rows, key = { it.commitment.id }) { row ->
             // The commitment's colour: in full on the count, a light tint on the detail line.
             val accent = Color(row.commitment.color)
@@ -220,11 +228,6 @@ fun TodayScreen(
             )
         }
 
-        if (state.rows.isNotEmpty()) {
-            item {
-                TextAction("New commitment", onClick = { creating = true }, muted = true, modifier = Modifier.padding(top = Space.s).offset(x = (-12).dp))
-            }
-        }
     }
 
     if (creating) {
