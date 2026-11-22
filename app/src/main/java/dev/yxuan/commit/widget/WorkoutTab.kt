@@ -137,10 +137,12 @@ private fun Live(live: LiveWorkout) {
             return@Column
         }
         val ex = live.exercise ?: return@Column
-        Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-            Text(ex.name, maxLines = 1, style = TextStyle(color = c.ink, fontSize = 17.sp, fontWeight = FontWeight.Bold), modifier = GlanceModifier.defaultWeight())
-            Text(WorkoutFormat.position(live) + ", ", maxLines = 1, style = TextStyle(color = c.muted, fontSize = 13.sp, fontWeight = FontWeight.Medium))
-            Elapsed(live.startedAt)
+        Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(GlanceModifier.defaultWeight()) {
+                Text(ex.name, maxLines = 1, style = TextStyle(color = c.ink, fontSize = 17.sp, fontWeight = FontWeight.Bold))
+                Text(WorkoutFormat.position(live), maxLines = 1, style = TextStyle(color = c.muted, fontSize = 13.sp, fontWeight = FontWeight.Medium))
+            }
+            Elapsed(live.startedAt, big = true)
         }
         Spacer(GlanceModifier.height(12.dp))
         SetProgress(s.setNo, ex.sets)
@@ -255,17 +257,21 @@ private fun SetProgress(setNo: Int, total: Int) {
     }
 }
 
-/** Time since the workout started, counting up on its own (a system Chronometer, no widget updates). */
+/**
+ * Time since the workout started, counting up on its own (a system Chronometer, no widget updates):
+ * [big] is the full panel's 32 sp headline, otherwise a 13 sp label for the compact panel.
+ */
 @Composable
-private fun Elapsed(startedAt: Long) {
+private fun Elapsed(startedAt: Long, big: Boolean = false) {
     val context = LocalContext.current
     val c = LocalWidgetColors.current
-    val views = RemoteViews(context.packageName, R.layout.widget_elapsed).apply {
+    val views = RemoteViews(context.packageName, if (big) R.layout.widget_elapsed_big else R.layout.widget_elapsed).apply {
         setChronometer(R.id.chronometer, SystemClock.elapsedRealtime() - (System.currentTimeMillis() - startedAt), null, true)
-        setTextColor(R.id.chronometer, c.muted.getColor(context).toArgb())
+        setTextColor(R.id.chronometer, (if (big) c.ink else c.muted).getColor(context).toArgb())
     }
     // Fixed width: a RemoteViews child otherwise stretches and pushes the exercise name out.
-    AndroidRemoteViews(views, modifier = GlanceModifier.width(56.dp).height(16.dp).semantics { contentDescription = "Workout time" })
+    val size = if (big) GlanceModifier.width(120.dp).height(40.dp) else GlanceModifier.width(56.dp).height(16.dp)
+    AndroidRemoteViews(views, modifier = size.semantics { contentDescription = "Workout time" })
 }
 
 /** Live countdown: the system Chronometer ticks every second at no widget-update cost (F5.6). */
