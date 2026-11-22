@@ -288,7 +288,7 @@ All screens use `background`, 24 dp side padding and the bottom nav, except Comm
 - Open / Done switch as two text tabs (`label` 16, selected Bold `ink`, other Regular `muted`).
 - Open: sections Overdue, This week, Later, No date (hide empty sections). Done: grouped by week, newest first, second line says "On time", "1 day late" or "No due date".
 - Rows are the shared todo row: due label left, checkbox right.
-- Primary button "Add to Study" fixed 24 dp from the bottom right.
+- Round + button (as on Today), labelled "Add to Study" for screen readers, fixed 24 dp from the bottom right.
 
 ### History: Tasks (nav: History)
 
