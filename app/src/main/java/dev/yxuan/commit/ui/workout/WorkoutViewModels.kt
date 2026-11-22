@@ -59,6 +59,10 @@ class WorkoutsViewModel(
         viewModelScope.launch { commitmentRepo.update(id, name, color, showInWidget) }
     }
 
+    fun reorderRoutines(commitmentId: String, ids: List<String>) {
+        viewModelScope.launch { routines.reorderRoutines(commitmentId, ids) }
+    }
+
     fun archiveCommitment(id: String) {
         viewModelScope.launch { commitmentRepo.archive(id) }
     }

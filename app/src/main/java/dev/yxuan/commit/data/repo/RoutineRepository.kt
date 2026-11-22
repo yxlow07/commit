@@ -69,6 +69,19 @@ class RoutineRepository(
         listener.onDataChanged()
     }
 
+    /** Saves [ids] as the order of [commitmentId]'s routines; any not listed follow them. */
+    suspend fun reorderRoutines(commitmentId: String, ids: List<String>) {
+        val all = routines.getForCommitment(commitmentId)
+        val byId = all.associateBy { it.id }
+        val ordered = ids.mapNotNull { byId[it] } + all.filter { it.id !in ids }
+        val now = clock.millis()
+        val changed = ordered.mapIndexedNotNull { i, r -> if (r.sortOrder == i) null else r.copy(sortOrder = i, updatedAt = now, dirty = true) }
+        if (changed.isNotEmpty()) {
+            routines.upsertAll(changed)
+            listener.onDataChanged()
+        }
+    }
+
     suspend fun moveRoutine(id: String, delta: Int) {
         val current = routines.getById(id) ?: return
         val reordered = reorder(routines.getForCommitment(current.commitmentId), id, delta, { it.id }) { r, i ->

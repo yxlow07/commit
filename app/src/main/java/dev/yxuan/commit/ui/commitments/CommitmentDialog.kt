@@ -127,8 +127,8 @@ fun CommitmentDialog(
                 }
             }
         }
-        if (initial != null) {
-            Text("To reorder, hold a commitment on Today and drag it.", style = Commit.type.meta, color = c.muted)
+        if (initial != null && initial.type != CommitmentType.WORKOUT) {
+            Text("To reorder, drag a commitment's handle on Today.", style = Commit.type.meta, color = c.muted)
         }
         onArchive?.let { TextAction("Archive", onClick = it, muted = true, modifier = Modifier.offset(x = (-12).dp)) }
     }

@@ -1,5 +1,10 @@
 package dev.yxuan.commit.ui.today
 
+import dev.yxuan.commit.ui.components.reorderActions
+import dev.yxuan.commit.ui.components.reorderDrag
+import dev.yxuan.commit.ui.components.reorderLift
+import dev.yxuan.commit.ui.components.ReorderHandle
+import dev.yxuan.commit.ui.components.rememberReorderState
 import dev.yxuan.commit.ui.workout.workoutSections
 import dev.yxuan.commit.ui.workout.workoutInProgress
 import dev.yxuan.commit.ui.workout.rememberWorkoutSections
@@ -199,47 +204,14 @@ fun TodayScreen(
     var creating by remember { mutableStateOf(startCreating) }
     val today = LocalDate.now()
 
-    // Hold a commitment and drag it to reorder. While dragging, [order] is the list as shown; it's
-    // saved when the finger lifts, and follows the database again otherwise.
+    // Commitments and routines reorder by dragging their grip, or holding the row.
     val listState = rememberLazyListState()
-    val haptics = LocalHapticFeedback.current
-    val workouts = rememberWorkoutSections(onOpenRoutine)
-    var dragging by remember { mutableStateOf<String?>(null) }
-    var dragOffset by remember { mutableFloatStateOf(0f) }
-    val order = remember { mutableStateListOf<String>() }
-    val rowIds = state.rows.map { it.commitment.id }
-    if (dragging == null && order.toList() != rowIds) { order.clear(); order.addAll(rowIds) }
+    val reorder = rememberReorderState(listState)
+    val workouts = rememberWorkoutSections(onOpenRoutine, listState)
+    reorder.sync(state.rows.map { it.commitment.id })
     val rowsById = state.rows.associateBy { it.commitment.id }
-    val shownRows = order.mapNotNull { rowsById[it] }
-    var pendingFrom by remember { mutableStateOf<Int?>(null) }
-    var orderAtStart by remember { mutableStateOf<List<String>>(emptyList()) }
-    fun startDrag(id: String) {
-        dragging = id
-        dragOffset = 0f
-        orderAtStart = order.toList()
-        pendingFrom = null
-        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-    }
-    /** Moves the dragged row by [dy]; it swaps places only with rows of its own group. */
-    fun dragBy(id: String, dy: Float, groupIds: List<String>) {
-        dragOffset += dy
-        val visible = listState.layoutInfo.visibleItemsInfo
-        val self = visible.firstOrNull { it.key == id } ?: return
-        // After a swap, wait until the list has laid the row out in its new place.
-        if (pendingFrom != null) { if (self.offset == pendingFrom) return else pendingFrom = null }
-        val centre = (self.offset + dragOffset + self.size / 2f).toInt()
-        val target = visible.firstOrNull { it.key != id && it.key in groupIds && centre in it.offset until it.offset + it.size } ?: return
-        order.add(order.indexOf(target.key as String), order.removeAt(order.indexOf(id)))
-        // The row now sits where the target was; keep it under the finger.
-        dragOffset -= (target.offset - self.offset)
-        pendingFrom = self.offset
-        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-    }
-    fun endDrag() {
-        if (dragging != null && order.toList() != orderAtStart) viewModel.reorder(order.toList())
-        dragging = null
-        dragOffset = 0f
-    }
+    val shownRows = reorder.order.mapNotNull { rowsById[it] }
+    val saveOrder: (List<String>) -> Unit = { viewModel.reorder(it) }
 
     LazyColumn(modifier.fillMaxSize(), state = listState, contentPadding = dev.yxuan.commit.ui.components.ScreenPadding) {
         item {
@@ -285,29 +257,8 @@ fun TodayScreen(
             items(rows, key = { it.commitment.id }) { row ->
                 val accent = Color(row.commitment.color)
                 val id = row.commitment.id
-                val lifted = dragging == id
-                // The drag handlers live across reorders (restarting them would drop the drag), so
-                // they read the group's current members through this.
-                val currentGroup by rememberUpdatedState(groupIds)
                 NavRow(
-                    leading = {
-                        // The handle: drag straight away, no hold needed.
-                        Box(
-                            Modifier
-                                .size(width = 28.dp, height = 44.dp)
-                                .pointerInput(id) {
-                                    detectDragGestures(
-                                        onDragStart = { startDrag(id) },
-                                        onDrag = { change, amount -> change.consume(); dragBy(id, amount.y, currentGroup) },
-                                        onDragEnd = { endDrag() },
-                                        onDragCancel = { endDrag() },
-                                    )
-                                },
-                            contentAlignment = Alignment.CenterStart,
-                        ) {
-                            GlyphIcon(Glyph.Grip, c.faint, size = 16.dp)
-                        }
-                    },
+                    leading = { ReorderHandle(reorder, id, groupIds, saveOrder) },
                     trailingColor = accent,
                     detailColor = lerp(c.muted, accent, 0.35f),
                     title = row.commitment.name,
@@ -318,22 +269,11 @@ fun TodayScreen(
                     minHeight = 64.dp,
                     onClick = { onOpenCommitment(row.commitment.id) },
                     modifier = Modifier
-                        .then(if (lifted) Modifier.zIndex(1f) else Modifier.animateItem())
-                        .graphicsLayer {
-                            translationY = if (lifted) dragOffset else 0f
-                            if (lifted) { scaleX = 1.02f; scaleY = 1.02f }
-                        }
-                        .then(if (lifted) Modifier.shadow(8.dp, RoundedCornerShape(Commit.shapes.button)).background(c.surface, RoundedCornerShape(Commit.shapes.button)) else Modifier)
-                        .pointerInput(id) {
-                            detectDragGesturesAfterLongPress(
-                                onDragStart = { startDrag(id) },
-                                onDrag = { change, amount -> change.consume(); dragBy(id, amount.y, currentGroup) },
-                                onDragEnd = { endDrag() },
-                                onDragCancel = { endDrag() },
-                            )
-                        }
+                        .then(if (reorder.dragging == id) Modifier else Modifier.animateItem())
+                        .reorderLift(reorder, id)
+                        .reorderDrag(reorder, id, groupIds, saveOrder)
                         .padding(bottom = Space.xs)
-                        .semantics { customActions = moveActions(id, groupIds) { viewModel.reorder(mergeGroup(order, it)) } },
+                        .semantics { customActions = reorderActions(id, groupIds) { viewModel.reorder(mergeGroup(reorder.order, it)) } },
                 )
             }
         }
@@ -356,18 +296,8 @@ fun TodayScreen(
     }
 }
 
-/** "Move up" / "Move down" for screen readers, which can't hold and drag. */
-private fun moveActions(id: String, order: List<String>, save: (List<String>) -> Unit): List<CustomAccessibilityAction> {
-    val i = order.indexOf(id)
-    fun moved(to: Int) = order.toMutableList().apply { add(to, removeAt(i)) }
-    return listOfNotNull(
-        if (i > 0) CustomAccessibilityAction("Move up") { save(moved(i - 1)); true } else null,
-        if (i in 0 until order.size - 1) CustomAccessibilityAction("Move down") { save(moved(i + 1)); true } else null,
-    )
-}
-
 /** [order] with the members of one group put in [groupOrder]'s sequence, in the slots they held. */
-private fun mergeGroup(order: List<String>, groupOrder: List<String>): List<String> {
+internal fun mergeGroup(order: List<String>, groupOrder: List<String>): List<String> {
     val members = groupOrder.toSet()
     val next = groupOrder.iterator()
     return order.map { if (it in members) next.next() else it }

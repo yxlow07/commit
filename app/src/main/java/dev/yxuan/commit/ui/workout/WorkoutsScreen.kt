@@ -1,5 +1,14 @@
 package dev.yxuan.commit.ui.workout
 
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
+import dev.yxuan.commit.ui.components.reorderActions
+import dev.yxuan.commit.ui.components.reorderDrag
+import dev.yxuan.commit.ui.components.reorderLift
+import dev.yxuan.commit.ui.components.ReorderHandle
+import dev.yxuan.commit.ui.components.rememberReorderState
+import dev.yxuan.commit.ui.components.ReorderState
+import androidx.compose.foundation.lazy.LazyListState
 import dev.yxuan.commit.data.repo.LiveWorkout
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -64,11 +73,13 @@ class WorkoutSections internal constructor(
     internal val viewModel: WorkoutsViewModel,
     internal val onEdit: (String) -> Unit,
     internal val onNewRoutine: (String) -> Unit,
+    internal val reorder: ReorderState,
 )
 
 @Composable
 fun rememberWorkoutSections(
     onOpenRoutine: (String) -> Unit,
+    listState: LazyListState,
     viewModel: WorkoutsViewModel = viewModel(factory = AppViewModelFactory),
 ): WorkoutSections {
     val owners by viewModel.workoutCommitments.collectAsStateWithLifecycle()
@@ -76,6 +87,8 @@ fun rememberWorkoutSections(
     val live by viewModel.live.collectAsStateWithLifecycle()
     var editingId by remember { mutableStateOf<String?>(null) }
     var namingFor by remember { mutableStateOf<String?>(null) }
+    val reorder = rememberReorderState(listState)
+    reorder.sync(routines.map { it.routine.id })
 
     owners.orEmpty().firstOrNull { it.id == editingId }?.let { owner ->
         CommitmentDialog(
@@ -101,7 +114,10 @@ fun rememberWorkoutSections(
             CommitTextField(name, { name = it }, label = "Name", keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words))
         }
     }
-    return WorkoutSections(owners.orEmpty(), routines, live, viewModel, { editingId = it }, { namingFor = it })
+    // Routines in the order shown (follows a drag in progress).
+    val byId = routines.associateBy { it.routine.id }
+    val shown = reorder.order.mapNotNull { byId[it] }
+    return WorkoutSections(owners.orEmpty(), shown, live, viewModel, { editingId = it }, { namingFor = it }, reorder)
 }
 
 /** The workout in progress, if any: one row that reopens it. */
@@ -141,8 +157,11 @@ fun LazyListScope.workoutSections(w: WorkoutSections, onOpenRoutine: (String) ->
                 Text("No routines yet. Add each workout day with +, like Push, Pull and Legs.", style = Commit.type.body, color = Commit.colors.textStrong, modifier = Modifier.padding(vertical = Space.s))
             }
         }
+        val groupIds = own.map { it.routine.id }
+        val save: (List<String>) -> Unit = { all -> w.viewModel.reorderRoutines(owner.id, all.filter { it in groupIds.toSet() }) }
         items(own, key = { it.routine.id }) { r ->
             val c = Commit.colors
+            val rid = r.routine.id
             val planned = Weekdays.isPlanned(r.routine.plannedDays, today)
             val parts = listOfNotNull(
                 if (r.exerciseCount == 1) "1 exercise" else "${r.exerciseCount} exercises",
@@ -150,9 +169,15 @@ fun LazyListScope.workoutSections(w: WorkoutSections, onOpenRoutine: (String) ->
                 if (planned) "planned today" else null,
             )
             Row(
-                Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(bottom = Space.xs).clickable { onOpenRoutine(r.routine.id) },
+                Modifier
+                    .then(if (w.reorder.dragging == rid) Modifier else Modifier.animateItem())
+                    .reorderLift(w.reorder, rid)
+                    .reorderDrag(w.reorder, rid, groupIds, save)
+                    .fillMaxWidth().heightIn(min = 64.dp).padding(bottom = Space.xs).clickable { onOpenRoutine(rid) }
+                    .semantics { customActions = reorderActions(rid, groupIds) { w.viewModel.reorderRoutines(owner.id, it) } },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                ReorderHandle(w.reorder, rid, groupIds, save)
                 Column(Modifier.weight(1f).padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(r.routine.name, style = Commit.type.titleDialog.copy(fontWeight = FontWeight.Medium), color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(parts.joinToString(", "), style = Commit.type.meta, color = lerp(c.muted, accent, 0.35f), maxLines = 2, overflow = TextOverflow.Ellipsis)
