@@ -23,6 +23,9 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -34,17 +37,18 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -177,14 +181,15 @@ fun PrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifi
     Box(
         modifier
             .height(48.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .background(c.ink)
-            .alpha(if (enabled) 1f else 0.4f)
+            .clip(RoundedCornerShape(Commit.shapes.button))
+            // Disabled through colour, not Modifier.alpha: an alpha layer that changes inside a
+            // dialog window wasn't redrawn, so the button vanished once it became enabled.
+            .background(if (enabled) c.ink else lerp(c.surface, c.ink, 0.4f))
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(horizontal = 22.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text, style = Commit.type.label, color = c.onInk, maxLines = 1)
+        Text(text, style = Commit.type.label, color = if (enabled) c.onInk else c.onInk.copy(alpha = 0.7f), maxLines = 1)
     }
 }
 
@@ -194,14 +199,13 @@ fun SecondaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modi
     Box(
         modifier
             .height(48.dp)
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(Commit.shapes.button))
             .background(c.fill)
-            .alpha(if (enabled) 1f else 0.4f)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(horizontal = 22.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text, style = Commit.type.label, color = c.ink, maxLines = 1)
+        Text(text, style = Commit.type.label, color = if (enabled) c.ink else c.faint, maxLines = 1)
     }
 }
 
@@ -212,7 +216,7 @@ fun TextAction(text: String, onClick: () -> Unit, modifier: Modifier = Modifier,
     Box(
         modifier
             .heightIn(min = Space.touch)
-            .clip(RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(Commit.shapes.button))
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center,
@@ -220,20 +224,19 @@ fun TextAction(text: String, onClick: () -> Unit, modifier: Modifier = Modifier,
         Text(
             text,
             style = Commit.type.label.copy(fontWeight = if (muted) FontWeight.Medium else FontWeight.Bold),
-            color = color ?: if (muted) c.muted else c.ink,
-            modifier = Modifier.alpha(if (enabled) 1f else 0.4f),
+            color = if (!enabled) c.faint else color ?: if (muted) c.muted else c.ink,
         )
     }
 }
 
-/** 44–48 dp `ink` circle with a plus. */
+/** 44–48 dp `ink` square (button radius) with a plus. */
 @Composable
 fun PrimaryRoundButton(onClick: () -> Unit, contentDescription: String, modifier: Modifier = Modifier, size: Dp = 48.dp) {
     val c = Commit.colors
     Box(
         modifier
             .size(size)
-            .clip(CircleShape)
+            .clip(RoundedCornerShape(Commit.shapes.button))
             .background(c.ink)
             .clickable(role = Role.Button, onClick = onClick)
             .semantics { this.contentDescription = contentDescription },
@@ -249,7 +252,7 @@ fun IconAction(glyph: Glyph, contentDescription: String, onClick: () -> Unit, mo
     Box(
         modifier
             .size(Space.touch)
-            .clip(CircleShape)
+            .clip(RoundedCornerShape(Commit.shapes.button))
             .clickable(role = Role.Button, onClick = onClick)
             .semantics { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center,
@@ -287,7 +290,7 @@ private fun StepButton(glyph: Glyph, label: String, onClick: () -> Unit) {
     Box(
         Modifier
             .size(Space.touch)
-            .clip(CircleShape)
+            .clip(RoundedCornerShape(Commit.shapes.button))
             .background(c.fill)
             .clickable(role = Role.Button, onClick = onClick)
             .semantics { contentDescription = label },
@@ -318,42 +321,71 @@ fun SetProgress(setNo: Int, total: Int, modifier: Modifier = Modifier, label: St
 
 // ---- Segmented control, text field, headings, tabs ----
 
-/** Forms only. Track `fill` r14 with 3 dp padding; selected segment `surface`, Bold, soft shadow. */
+/**
+ * Forms only. Track `fill` r14 with 3 dp padding; selected segment `surface`, Bold, soft shadow.
+ * Equal-width segments when the labels fit; otherwise ([scrollable]) the track scrolls sideways and
+ * each segment is as wide as its label, so long names are never squeezed or cut.
+ */
 @Composable
-fun <T> SegmentedControl(options: List<T>, selected: T?, onSelect: (T) -> Unit, label: (T) -> String, modifier: Modifier = Modifier) {
+fun <T> SegmentedControl(
+    options: List<T>,
+    selected: T?,
+    onSelect: (T) -> Unit,
+    label: (T) -> String,
+    modifier: Modifier = Modifier,
+    scrollable: Boolean = false,
+) {
     val c = Commit.colors
     val sh = Commit.shapes
-    Row(
-        modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(sh.segmentTrack))
-            .background(c.fill)
-            .padding(3.dp)
-            .selectableGroup(),
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        options.forEach { option ->
-            val on = option == selected
-            Box(
-                Modifier
-                    .weight(1f)
-                    .height(42.dp)
-                    .then(if (on) Modifier.shadow(1.dp, RoundedCornerShape(sh.segment), ambientColor = c.ink.copy(alpha = 0.12f), spotColor = c.ink.copy(alpha = 0.12f)) else Modifier)
-                    .clip(RoundedCornerShape(sh.segment))
-                    .background(if (on) c.surface else Color.Transparent)
-                    .selectable(selected = on, role = Role.RadioButton, onClick = { onSelect(option) }),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    label(option),
-                    style = Commit.type.label.copy(fontSize = 14.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal),
-                    color = c.ink,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 6.dp),
-                )
+    val track = modifier
+        .fillMaxWidth()
+        .clip(RoundedCornerShape(sh.segmentTrack))
+        .background(c.fill)
+        .padding(3.dp)
+    if (!scrollable) {
+        Row(track.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            options.forEach { option ->
+                Segment(label(option), option == selected, { onSelect(option) }, Modifier.weight(1f))
             }
         }
+        return
+    }
+    val listState = rememberLazyListState()
+    val selectedIndex = options.indexOf(selected)
+    // Bring the selected segment into view (e.g. the widget's current tab far down the list).
+    LaunchedEffect(selectedIndex) {
+        if (selectedIndex >= 0) listState.animateScrollToItem(selectedIndex, scrollOffset = -40)
+    }
+    LazyRow(track.selectableGroup(), state = listState, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        items(options.size) { i ->
+            val option = options[i]
+            Segment(label(option), option == selected, { onSelect(option) }, Modifier.widthIn(min = 72.dp), padding = 16.dp)
+        }
+    }
+}
+
+@Composable
+private fun Segment(text: String, on: Boolean, onClick: () -> Unit, modifier: Modifier, padding: Dp = 6.dp) {
+    val c = Commit.colors
+    val sh = Commit.shapes
+    Box(
+        modifier
+            .height(42.dp)
+            .then(if (on) Modifier.shadow(1.dp, RoundedCornerShape(sh.segment), ambientColor = c.ink.copy(alpha = 0.12f), spotColor = c.ink.copy(alpha = 0.12f)) else Modifier)
+            .clip(RoundedCornerShape(sh.segment))
+            .background(if (on) c.surface else Color.Transparent)
+            .selectable(selected = on, role = Role.RadioButton, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text,
+            style = Commit.type.label.copy(fontSize = 14.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal),
+            color = c.ink,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = padding),
+        )
     }
 }
 

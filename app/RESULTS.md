@@ -594,3 +594,20 @@ Date: 2026-11-22. Spec: [App Design Spec.md](App%20Design%20Spec.md). Plan: last
 - **The web app's layout** keeps its current design; it now uses the greyscale tokens through its CSS variables, so its default look is grey too.
 - **Test data in the synced account:** a "Gym" workout commitment (archived), its "Push Day" routine, two short workout sessions in History; plus the M10 test todos from earlier.
 - **Build environment:** with VS Code open, `app/build` and the Kotlin daemon's caches got locked mid-build. Command-line builds here used an init script that moves the build folder outside the workspace and `-Pkotlin.compiler.execution.strategy=in-process`; the project's build files are unchanged.
+
+
+---
+
+# Results: UI updates (2026-11-22)
+
+| Change | Status |
+| --- | --- |
+| Repeat interval on an iOS-style scroll wheel (snapping, drum tilt and fade, one band behind number and "days", haptic tick, TalkBack adjustable); 5 rows in the editor, 3 in quick-add; the sentence also ticks Repeat | Done (`ui/components/WheelPicker.kt`) |
+| Buttons, round add and steppers: 12 dp corners instead of fully rounded (app and widget, `CommitShapes.button`); spec updated | Done |
+| Commitment picker in quick-add/editor: equal segments only when the names fit; otherwise it scrolls sideways with each segment as wide as its name, selected one scrolled into view | Done |
+
+Found and fixed:
+- **Primary buttons vanished in dialogs once enabled** (e.g. "Add commitment" after typing a name, "Save" in the exercise dialog): the disabled state used `Modifier.alpha`, and the alpha layer change wasn't redrawn in a dialog window. Disabled is now drawn with colours.
+- **Quick-add reused from the background kept the old commitment**: the popup is single-instance; it now takes the commitment from `onNewIntent`.
+
+Checked on the emulator: wheel scroll and snap (4 → 7 → 5, sentence follows), band, sentence tap; "Add commitment" stays visible after typing; your four commitments in quick-add (long names readable, "Code In place" preselected and scrolled to); reused popup follows the widget tab; the widget "More" picker selects a tab. Unit tests 60 of 60.

@@ -1,6 +1,11 @@
 package dev.yxuan.commit.ui.todos
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -45,6 +50,7 @@ import dev.yxuan.commit.ui.components.SegmentedControl
 import dev.yxuan.commit.ui.components.TextAction
 import dev.yxuan.commit.ui.components.TextTabs
 import dev.yxuan.commit.ui.components.TimePickerSheet
+import dev.yxuan.commit.ui.components.WheelPicker
 import dev.yxuan.commit.ui.format.DueLabels
 import dev.yxuan.commit.ui.theme.Commit
 import dev.yxuan.commit.ui.theme.tnum
@@ -93,20 +99,30 @@ fun TodoForm(
     }
 }
 
-/** Segmented control of commitments (workout commitments are never offered). Scrolls past four. */
+/**
+ * Segmented control of commitments (workout commitments are never offered). Equal widths while the
+ * names fit (up to 4 short names); otherwise it scrolls sideways so every name stays readable.
+ */
 @Composable
 private fun CommitmentField(commitments: List<CommitmentEntity>, selected: String?, onSelect: (String) -> Unit) {
     if (commitments.isEmpty()) return
+    // Roughly 9 characters fit in a segment at 4 across a phone-width panel, 13 at 3, 20 at 2.
+    val maxChars = when (commitments.size) {
+        1, 2 -> 20
+        3 -> 13
+        4 -> 9
+        else -> 0
+    }
+    val fits = commitments.all { it.name.length <= maxChars }
     Column {
         FieldLabel("Commitment")
-        if (commitments.size <= 4) {
-            SegmentedControl(commitments.map { it.id }, selected, onSelect, label = { id -> commitments.first { it.id == id }.name })
-        } else {
-            val index = commitments.indexOfFirst { it.id == selected }.coerceAtLeast(0)
-            Row(Modifier.horizontalScroll(rememberScrollState())) {
-                TextTabs(commitments.map { it.name }, index, { onSelect(commitments[it].id) }, gap = 18.dp)
-            }
-        }
+        SegmentedControl(
+            options = commitments.map { it.id },
+            selected = selected,
+            onSelect = onSelect,
+            label = { id -> commitments.first { it.id == id }.name },
+            scrollable = !fits,
+        )
     }
 }
 
@@ -156,7 +172,8 @@ private fun LeadField(lead: Int?, onChange: (Int?) -> Unit) {
 }
 
 /**
- * "Repeat every [4] days after I finish it" (F4.2). The editor also offers fixed weekdays (F4.3).
+ * "Repeat every 4 days after I finish it" with the interval on a scroll wheel (F4.2). The editor
+ * also offers fixed weekdays (F4.3).
  */
 @Composable
 private fun RepeatField(
@@ -168,7 +185,9 @@ private fun RepeatField(
 ) {
     val c = Commit.colors
     val repeating = repeatDays != null || (recurDays ?: 0) > 0
-    var daysText by rememberSaveable { mutableStateOf((repeatDays ?: 4).toString()) }
+    // Remembered while unticked, so ticking again brings back the last interval.
+    var days by rememberSaveable { mutableStateOf(repeatDays ?: 4) }
+    if (repeatDays != null && repeatDays != days) days = repeatDays
     val weekdays = (recurDays ?: 0) > 0
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -176,31 +195,43 @@ private fun RepeatField(
             CommitCheckbox(
                 checked = repeating,
                 onCheckedChange = { on ->
-                    if (on) onRepeatChange(daysText.toIntOrNull()?.coerceAtLeast(1) ?: 4)
+                    if (on) onRepeatChange(days)
                     else { onRepeatChange(null); onRecurDaysChange(null) }
                 },
                 title = "Repeat",
                 modifier = Modifier.padding(end = 4.dp),
             )
-            if (!repeating || !weekdays) {
-                Text("Repeat every ", style = Commit.type.body, color = c.ink)
-                // The number is editable once ticked ("tap 4 to change it").
-                BasicTextField(
-                    value = daysText,
-                    onValueChange = { v ->
-                        daysText = v.filter(Char::isDigit).take(3)
-                        if (repeating) onRepeatChange(daysText.toIntOrNull()?.coerceAtLeast(1) ?: 1)
-                    },
-                    enabled = repeating,
-                    singleLine = true,
-                    textStyle = Commit.type.body.tnum().copy(color = c.ink, textDecoration = if (repeating) TextDecoration.Underline else null),
-                    cursorBrush = SolidColor(c.ink),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.width((10 * daysText.length.coerceAtLeast(1) + 4).dp).semantics { contentDescription = "Days between repeats" },
-                )
-                Text(" days after I finish it", style = Commit.type.body, color = c.ink, maxLines = 1)
-            } else {
-                Text("Repeat on fixed weekdays", style = Commit.type.body, color = c.ink)
+            // The sentence ticks the box too.
+            Text(
+                if (repeating && weekdays) "Repeat on fixed weekdays"
+                else "Repeat every ${if (days == 1) "day" else "$days days"} after I finish it",
+                style = Commit.type.body.tnum(),
+                color = c.ink,
+                modifier = Modifier.clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) {
+                    if (repeating) { onRepeatChange(null); onRecurDaysChange(null) } else onRepeatChange(days)
+                },
+            )
+        }
+        // The interval on a scroll wheel, once ticked (F4.2).
+        if (repeating && !weekdays) {
+            // One selection band behind the number and its unit, as on iOS.
+            Box(Modifier.padding(start = 44.dp), contentAlignment = Alignment.CenterStart) {
+                Box(Modifier.width(150.dp).height(36.dp).background(c.fill, RoundedCornerShape(10.dp)))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    WheelPicker(
+                        values = REPEAT_DAY_RANGE,
+                        value = days,
+                        onValueChange = { days = it; onRepeatChange(it) },
+                        label = { it.toString() },
+                        contentDescription = "Days between repeats",
+                        visibleRows = if (compact) 3 else 5,
+                        showBand = false,
+                    )
+                    Text(if (days == 1) "day" else "days", style = Commit.type.body, color = c.ink)
+                }
             }
         }
         if (repeating && !compact) {
@@ -208,7 +239,7 @@ private fun RepeatField(
                 items = listOf("After I finish it", "On weekdays"),
                 selected = if (weekdays) 1 else 0,
                 onSelect = { i ->
-                    if (i == 0) { onRecurDaysChange(null); onRepeatChange(daysText.toIntOrNull()?.coerceAtLeast(1) ?: 4) }
+                    if (i == 0) { onRecurDaysChange(null); onRepeatChange(days) }
                     else { onRepeatChange(null); onRecurDaysChange(recurDays?.takeIf { it > 0 } ?: 1) }
                 },
                 modifier = Modifier.padding(start = 44.dp),
@@ -219,6 +250,9 @@ private fun RepeatField(
         }
     }
 }
+
+/** Every day up to a year. */
+private val REPEAT_DAY_RANGE = (1..365).toList()
 
 /** Mon…Sun as text toggles: selected Bold `ink`. At least one day stays selected. */
 @Composable

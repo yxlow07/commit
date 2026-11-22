@@ -344,7 +344,7 @@ private fun Checkbox(todoId: String, row: Int, title: String, checked: Boolean) 
 private fun AddButton(commitmentId: String) {
     val c = LocalWidgetColors.current
     Box(
-        GlanceModifier.size(44.dp).cornerRadius(22.dp).background(c.ink)
+        GlanceModifier.size(44.dp).cornerRadius(WIDGET_BUTTON_RADIUS).background(c.ink)
             .clickable(actionStartActivity<QuickAddActivity>(actionParametersOf(CommitmentIdParam to commitmentId)))
             .semantics { contentDescription = "Add todo" },
         contentAlignment = Alignment.Center,

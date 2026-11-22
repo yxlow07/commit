@@ -91,6 +91,8 @@ data class CommitShapes(
     val panel: Dp = 28.dp,
     val preview: Dp = 24.dp,
     val field: Dp = 12.dp,
+    /** All buttons (text, round add, steppers): 12 dp, softer than the spec's fully rounded pills. */
+    val button: Dp = 12.dp,
     val segmentTrack: Dp = 14.dp,
     val segment: Dp = 11.dp,
     val heatCell: Dp = 3.dp,

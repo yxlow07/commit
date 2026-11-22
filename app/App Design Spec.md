@@ -67,7 +67,7 @@ Family: **Hanken Grotesk** (bundle the TTF in the app). Use tabular figures (`fo
 - Todo row: min height 52 dp in the widget, 56 dp in the app. No dividers.
 - Gap between sections: 24 dp. Gap between a section heading and its first row: 4 dp.
 - Touch targets: at least 44 x 44 dp, even when the visible mark is smaller (checkbox is 22 dp inside a 44 dp hit area).
-- Corner radius: widget and dialog 28, theme preview 24, fields 12, segmented track 14 (segments 11), buttons fully rounded (height / 2), checkboxes and avatars circular, heatmap cells 3.
+- Corner radius: widget and dialog 28, theme preview 24, fields 12, segmented track 14 (segments 11), buttons 12 (text, round add and stepper buttons alike), checkboxes and avatars circular, heatmap cells 3.
 
 ## Components
 
@@ -118,14 +118,14 @@ Recurring chores use the same rules for their next due date.
 
 | Type | Look | Used for |
 | --- | --- | --- |
-| Primary | `ink` fill, `onInk` text, 48 dp tall, fully rounded, `label` | Save todo, Done set, Skip rest, Add to Study |
-| Primary round | 44–48 dp `ink` circle, 18–20 dp plus icon in `onInk` | Add todo in the widget and on Today |
+| Primary | `ink` fill, `onInk` text, 48 dp tall, 12 dp corners, `label` | Save todo, Done set, Skip rest, Add to Study |
+| Primary round | 44–48 dp `ink` square with 12 dp corners, 18–20 dp plus icon in `onInk` | Add todo in the widget and on Today |
 | Secondary | `fill` background, `ink` text | Add 30 s, Import from link |
 | Text | No background, `ink` Bold (or `muted` Medium for low-priority actions) | Cancel, Edit, Open recap, No date |
 
 ### Stepper (reps and weight)
 
-- &#91;−\] value \[+\] in a row. Buttons: 44 dp `fill` circles with a 22 dp Regular minus or plus.
+- &#91;−\] value \[+\] in a row. Buttons: 44 dp `fill` squares with 12 dp corners and a 22 dp Regular minus or plus.
 - Value: 28 / Light, tabular, `ink`. Unit under it in `micro`, `muted` ("reps", "kg").
 - Reps step by 1, weight by 2.5 kg, neither below 0. The value logged for the set is whatever is showing when Done set is tapped.
 
@@ -264,7 +264,7 @@ A translucent activity themed as a dialog, opened by the widget's add button and
 - Title field gets focus on open. Save is disabled until the title has a character.
 - Commitment defaults to the tab the widget was showing. Gym is not offered (workouts are planned in the app).
 - Due: tapping the date opens the system date picker, tapping the time opens the time picker. The time button reads "Add time" in `muted` until set. "No date" clears both.
-- Repeat: a checkbox; when ticked, the number of days becomes editable (tap "4" to change it).
+- Repeat: a checkbox (the sentence ticks it too); when ticked, the number of days is picked on a scroll wheel (1–365) with one selection band behind the number and "days".
 - Save closes the popup, writes to Room, and the widget redraws with the new row. Cancel or tapping the scrim closes without saving. Back does the same.
 
 ## App screens

@@ -93,6 +93,9 @@ private fun Idle(routines: List<RoutineSummary>, runningElsewhere: Boolean) {
     }
 }
 
+/** Corner radius of every widget button (matches the app's button token). */
+internal val WIDGET_BUTTON_RADIUS = 12.dp
+
 /** Below this height (3x2 / 4x2) the workout panel uses its compact form. */
 internal val COMPACT_WORKOUT_HEIGHT = 270.dp
 
@@ -267,19 +270,19 @@ private fun Stepper(value: String, unit: String, action: Class<out ActionCallbac
 private fun StepButton(icon: Int, label: String, action: Action) {
     val c = LocalWidgetColors.current
     Box(
-        GlanceModifier.size(44.dp).cornerRadius(22.dp).background(c.fill).clickable(action).semantics { contentDescription = label },
+        GlanceModifier.size(44.dp).cornerRadius(WIDGET_BUTTON_RADIUS).background(c.fill).clickable(action).semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
         Image(ImageProvider(icon), contentDescription = null, colorFilter = ColorFilter.tint(c.ink), modifier = GlanceModifier.size(20.dp))
     }
 }
 
-/** Primary (`ink`) or secondary (`fill`) button, 48 dp tall, fully rounded. */
+/** Primary (`ink`) or secondary (`fill`) button, 48 dp tall, 12 dp corners. */
 @Composable
 internal fun WidgetButton(text: String, action: Action, primary: Boolean, modifier: GlanceModifier = GlanceModifier, height: androidx.compose.ui.unit.Dp = 48.dp) {
     val c = LocalWidgetColors.current
     Box(
-        modifier.height(height).cornerRadius(height / 2).background(if (primary) c.ink else c.fill).padding(horizontal = 18.dp).clickable(action),
+        modifier.height(height).cornerRadius(WIDGET_BUTTON_RADIUS).background(if (primary) c.ink else c.fill).padding(horizontal = 18.dp).clickable(action),
         contentAlignment = Alignment.Center,
     ) {
         Text(text, maxLines = 1, style = TextStyle(color = if (primary) c.onInk else c.ink, fontSize = 15.sp, fontWeight = FontWeight.Medium))

@@ -1,5 +1,6 @@
 package dev.yxuan.commit.quickadd
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -35,6 +36,7 @@ import dev.yxuan.commit.ui.theme.Commit
 import dev.yxuan.commit.ui.theme.CommitTheme
 import dev.yxuan.commit.ui.todos.TodoForm
 import dev.yxuan.commit.widget.CommitmentIdParam
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -44,9 +46,22 @@ import kotlinx.coroutines.launch
  */
 class QuickAddActivity : ComponentActivity() {
 
+    /**
+     * The commitment the caller asked for. The popup is single-instance, so a second "Add" while one
+     * is still open arrives through [onNewIntent]; this keeps the preselection in step with it.
+     */
+    private val requestedCommitment = MutableStateFlow<String?>(null)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        requestedCommitment.value = intent.getStringExtra(CommitmentIdParam.name)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val initialCommitment = intent.getStringExtra(CommitmentIdParam.name)
+        requestedCommitment.value = initialCommitment
         val container = appContainer
         val commitmentsFlow = container.commitmentRepository.observeActive()
             .map { list -> list.filter { it.type == CommitmentType.STANDARD } }
@@ -61,6 +76,8 @@ class QuickAddActivity : ComponentActivity() {
                 var due by remember { mutableStateOf<Due?>(null) }
                 var repeatDays by rememberSaveable { mutableStateOf<Int?>(null) }
                 var saving by remember { mutableStateOf(false) }
+                val requested by requestedCommitment.collectAsState()
+                LaunchedEffect(requested) { requested?.let { commitmentId = it } }
 
                 // A workout tab (or a stale id) can't hold todos: fall back to the first todo commitment.
                 LaunchedEffect(commitments) {
