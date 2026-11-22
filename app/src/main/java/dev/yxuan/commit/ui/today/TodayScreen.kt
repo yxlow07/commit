@@ -170,7 +170,7 @@ fun TodayScreen(
     LazyColumn(modifier.fillMaxSize(), contentPadding = dev.yxuan.commit.ui.components.ScreenPadding) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(Space.l)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Row(
                         Modifier.weight(1f).semantics(mergeDescendants = true) { heading() },
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
