@@ -38,13 +38,18 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         private const val PERIODIC = "sync-periodic"
         private val network = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
 
-        /** Runs as soon as there's network; repeated calls while one is pending are merged. */
+        /**
+         * Runs as soon as there's network; repeated calls are merged into one job. REPLACE, not KEEP:
+         * with KEEP, a job waiting out its retry backoff after a failed sync swallowed every new request
+         * (push, app start, local write) until the backoff ended, which grows exponentially. A sync is
+         * idempotent and rows are marked clean only after the server confirms them, so restarting one is safe.
+         */
         fun enqueueNow(context: Context) {
             val request = OneTimeWorkRequestBuilder<SyncWorker>()
                 .setConstraints(network)
                 .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .build()
-            WorkManager.getInstance(context).enqueueUniqueWork(NOW, ExistingWorkPolicy.KEEP, request)
+            WorkManager.getInstance(context).enqueueUniqueWork(NOW, ExistingWorkPolicy.REPLACE, request)
         }
 
         fun cancelAll(context: Context) {

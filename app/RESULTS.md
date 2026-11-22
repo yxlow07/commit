@@ -521,9 +521,19 @@ A review of M9 and M10 found that neither build had been installed on the emulat
   - Snooze 1h from the shade → stored and alarm at 00:37:42; still set after an app update (which clears all alarms and re-runs the boot reschedule) and after ticking another todo.
   - Weekday chore (Mon · Thu, due Thu 19 Nov, viewed Sat 21 Nov): "Overdue · 2d · Mon · Thu".
 
+### After applying 0004 + 0005 (phone + web, local dev server against the real Supabase project)
+
+- Phone uploads work again: the queued test todos uploaded, nothing pending.
+- The web shows the weekday chore as "Overdue · 2d · Mon · Thu", the same as the phone.
+- **Web tick of the weekday chore** (`toggle_todo` from 0005): web shows "Next: Mon · Mon · Thu"; the phone got `last_done_at` 23:50:03 and `done_at` stayed empty.
+- **Web untick → phone:** push at 23:52:04.4, phone sync finished 23:52:05.8.
+- **Lead time from the web:** todo due 00:30 tomorrow with "30m before" → the phone set its alarm for 00:00:00, and the reminder rang at 00:00 reading "Due in 30 min · 00:30".
+- **Retention:** seeded synced rows 400 days old (a completion, a session with 2 sets), a 10-day-old completion, and an old set whose session isn't on the phone. After a sync: "removed 4 local history rows older than 12 months"; the recent completion and the orphan set were kept.
+
+### Found during these checks: sync requests swallowed during retry backoff
+
+`SyncWorker.enqueueNow` used `ExistingWorkPolicy.KEEP`. After a failed sync (here the missing 0004 columns), the job waits out an exponential retry backoff, and every new request (push, app start, local write) was dropped until then. Seen on the emulator: a push at 23:50:06 started no sync. Now `REPLACE` (syncs are idempotent; rows are marked clean only after the server confirms them). After the fix the next sync ran straight away.
+
 ## Pending
 
-- Apply `supabase/migrations/0004_calendar_recurrence_and_lead_time.sql` then `0005_toggle_todo_calendar.sql` in the Supabase SQL Editor. Until then, todo uploads from the phone and new todos from the web fail.
-- Redeploy the web app (`npm run deploy` in `web/`).
-- Then: phone ↔ web check of a weekday chore (create, tick on the web, phone shows it done until the next matching day), lead time on the web, and retention after a sync.
-
+- The web deploy went to a **preview** (`m9-m10.commit-45e.pages.dev`), because Wrangler names the deployment after the git branch. Production (commit.yxuan.dev) still runs the old build until it's deployed with `--branch master` (or from `master`).
