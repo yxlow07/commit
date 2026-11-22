@@ -16,3 +16,6 @@ local.properties
 firebase-service-account.json
 /**/node_modules
 /app/google-services.json
+# Release signing key (never commit)
+*.jks
+*.keystore

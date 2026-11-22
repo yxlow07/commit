@@ -39,13 +39,35 @@ android {
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${localProperty("google.webClientId")}\"")
     }
 
-    buildTypes {
-        release {
-            optimization {
-                enable = true
-                packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
+    // Release signing from local.properties (never committed): release.storeFile, release.storePassword,
+    // release.keyAlias, release.keyPassword. Without them the release APK is built unsigned.
+    val releaseStore = localProperty("release.storeFile")
+    signingConfigs {
+        if (releaseStore.isNotEmpty()) {
+            create("release") {
+                storeFile = rootProject.file(releaseStore)
+                storePassword = localProperty("release.storePassword")
+                keyAlias = localProperty("release.keyAlias")
+                keyPassword = localProperty("release.keyPassword")
             }
         }
+    }
+
+    buildTypes {
+        release {
+            signingConfigs.findByName("release")?.let { signingConfig = it }
+            optimization {
+                // Shrinking on, but without packageScope = androidx/kotlin/kotlinx: that library
+                // optimisation moved a class away from the package-private kotlin.text class it extends,
+                // and the release build crashed at launch (IllegalAccessError in WorkManagerInitializer).
+                enable = true
+            }
+        }
+    }
+    lint {
+        // False positive: libraries request androidx.fragment 1.1.0 / 1.2.5, but Gradle resolves 1.5.7
+        // (>= 1.3.0), and MainActivity is a ComponentActivity, so the old FragmentActivity bug can't occur.
+        disable += "InvalidFragmentVersionForActivityResult"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11

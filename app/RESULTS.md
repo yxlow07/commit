@@ -709,3 +709,8 @@ Changed (2026-11-22), not yet verified on a device:
 - "All done for X." replaces "Nothing to do here."; History heatmap has a Less → More gradient legend; Settings recap hints shortened ("Today's plan", "Today's wins, tomorrow's plan") and the chore paragraph removed.
 - Favicon is the heatmap icon (`app/icon.svg`, from `app/icon/icon-master.svg`); the stock Next.js `favicon.ico` is removed.
 - `move*` (one step) mutations replaced by `reorder*` (save a whole order). tsc, eslint, 40 vitest tests and `next build` pass. Not yet seen in a browser: needs a signed-in session on a deployed build.
+
+## Release build (2026-11-22)
+- Release signing reads `release.storeFile`, `release.storePassword`, `release.keyAlias`, `release.keyPassword` from `local.properties` (not committed); `*.jks` / `*.keystore` are git-ignored. Without them the release APK is built unsigned.
+- R8 library optimisation (`packageScope = androidx/kotlin/kotlinx`) made the release build crash at launch (IllegalAccessError: a class moved away from the package-private kotlin.text class it extends, in WorkManagerInitializer). Release now shrinks without `packageScope`: 11.8 MB, and a debug-key-signed copy ran on the emulator with no crashes across Today, History, Settings, Archived, a commitment page, the routine editor, the widget and its edit popup.
+- Lint `InvalidFragmentVersionForActivityResult` disabled: false positive (libraries request fragment 1.1.0 / 1.2.5, Gradle resolves 1.5.7; MainActivity is a ComponentActivity).
