@@ -3,6 +3,7 @@ package dev.yxuan.commit.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import dev.yxuan.commit.ui.theme.LocalCommitColors
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -77,6 +80,10 @@ fun DialogPanel(
 ) {
     val c = Commit.colors
     val shape = RoundedCornerShape(Commit.shapes.panel)
+    // On a see-through panel the usual light `fill` all but vanishes, so boxes (fields, pills, wheel
+    // bands) get a stronger, solid tint of `ink` there; solid so nothing behind shows through them.
+    val inner = if (glass == Glass.None) c else c.copy(fill = c.ink.copy(alpha = if (c.isDark) 0.2f else 0.13f).compositeOver(c.surface))
+    CompositionLocalProvider(LocalCommitColors provides inner) {
     Column(
         modifier
             .fillMaxWidth()
@@ -96,5 +103,6 @@ fun DialogPanel(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
             actions()
         }
+    }
     }
 }
