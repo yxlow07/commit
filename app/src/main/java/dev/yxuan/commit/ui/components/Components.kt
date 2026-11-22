@@ -317,9 +317,17 @@ fun IconAction(glyph: Glyph, contentDescription: String, onClick: () -> Unit, mo
  */
 @Composable
 fun SectionHeader(text: String, glyph: Glyph, actionLabel: String, onAction: () -> Unit, modifier: Modifier = Modifier) {
+    SectionHeader(text, modifier) {
+        IconAction(glyph, actionLabel, onAction, tint = Commit.colors.muted, glyphSize = 18.dp, modifier = Modifier.offset(x = 13.dp))
+    }
+}
+
+/** [SectionHeader] with several actions; give the last one `Modifier.offset(x = 13.dp)` to line up with chevrons. */
+@Composable
+fun SectionHeader(text: String, modifier: Modifier = Modifier, actions: @Composable RowScope.() -> Unit) {
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(text, style = Commit.type.caption, color = Commit.colors.muted, modifier = Modifier.weight(1f).semantics { heading() })
-        IconAction(glyph, actionLabel, onAction, tint = Commit.colors.muted, glyphSize = 18.dp, modifier = Modifier.offset(x = 13.dp))
+        actions()
     }
 }
 
@@ -663,9 +671,9 @@ fun NavRow(
 
 // ---- Bottom navigation ----
 
-enum class NavTab(val label: String) { Today("Today"), History("History"), Workouts("Workouts"), Settings("Settings") }
+enum class NavTab(val label: String) { Today("Today"), History("History"), Settings("Settings") }
 
-/** 72 dp, `surface`, four text items; selected Bold `ink`, others Regular `muted`. No icons. */
+/** 72 dp, `surface`, three text items; selected Bold `ink`, others Regular `muted`. No icons. */
 @Composable
 fun BottomNav(selected: NavTab, onSelect: (NavTab) -> Unit, modifier: Modifier = Modifier) {
     val c = Commit.colors

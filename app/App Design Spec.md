@@ -151,7 +151,7 @@ Number-only fields (sets, reps, weight, rest) centre their text; free text stays
 
 ### Bottom nav (app)
 
-72 dp tall, `surface`, four equal text items: Today, History, Workouts, Settings. `label` at 14: selected Bold `ink`, others Regular `muted`. Text only, no icons.
+72 dp tall, `surface`, three equal text items: Today, History, Settings. Workouts live on Today: a workout in progress at the top, then one section per workout commitment (heading with pencil and +, routine rows with Start). `label` at 14: selected Bold `ink`, others Regular `muted`. Text only, no icons.
 
 ## Widget
 

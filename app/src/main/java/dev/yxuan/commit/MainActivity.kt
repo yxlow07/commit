@@ -40,7 +40,6 @@ import dev.yxuan.commit.ui.SettingsRoute
 import dev.yxuan.commit.ui.ThemeRoute
 import dev.yxuan.commit.ui.TodayRoute
 import dev.yxuan.commit.ui.TodoEditorRoute
-import dev.yxuan.commit.ui.WorkoutsRoute
 import dev.yxuan.commit.ui.components.BottomNav
 import dev.yxuan.commit.ui.components.NavTab
 import dev.yxuan.commit.ui.history.HistoryScreen
@@ -57,7 +56,6 @@ import dev.yxuan.commit.ui.todos.CommitmentDetailScreen
 import dev.yxuan.commit.ui.todos.TodoEditorScreen
 import dev.yxuan.commit.ui.workout.LiveWorkoutScreen
 import dev.yxuan.commit.ui.workout.RoutineEditorScreen
-import dev.yxuan.commit.ui.workout.WorkoutsScreen
 
 class MainActivity : ComponentActivity() {
 
@@ -106,7 +104,8 @@ class MainActivity : ComponentActivity() {
         getStringExtra(EXTRA_TODO_ID)?.let { return TodoEditorRoute(todoId = it) }
         if (getBooleanExtra(EXTRA_NEW_COMMITMENT, false)) return TodayRoute(newCommitment = true)
         if (getBooleanExtra(EXTRA_OPEN_WORKOUT, false)) return LiveWorkoutRoute
-        if (getBooleanExtra(EXTRA_OPEN_WORKOUTS, false)) return WorkoutsRoute
+        // Workouts live on Today now.
+        if (getBooleanExtra(EXTRA_OPEN_WORKOUTS, false)) return TodayRoute()
         getStringExtra(EXTRA_OPEN_RECAP)?.let { kind ->
             if (RecapKind.entries.any { it.name == kind }) return RecapRoute(kind)
         }
@@ -151,7 +150,6 @@ private fun CommitNavHost(pendingRoute: Any?, onRouteOpened: () -> Unit) {
         val route: Any = when (tab) {
             NavTab.Today -> TodayRoute()
             NavTab.History -> HistoryRoute
-            NavTab.Workouts -> WorkoutsRoute
             NavTab.Settings -> SettingsRoute
         }
         nav.navigate(route) {
@@ -167,7 +165,8 @@ private fun CommitNavHost(pendingRoute: Any?, onRouteOpened: () -> Unit) {
             TabShell(NavTab.Today, goTab) { m ->
                 TodayScreen(
                     onOpenCommitment = { nav.navigate(CommitmentRoute(it)) },
-                    onOpenWorkouts = { goTab(NavTab.Workouts) },
+                    onOpenRoutine = { nav.navigate(RoutineEditorRoute(it)) },
+                    onOpenLive = { nav.navigate(LiveWorkoutRoute) { launchSingleTop = true } },
                     startCreating = newCommitment,
                     modifier = m,
                 )
@@ -176,15 +175,6 @@ private fun CommitNavHost(pendingRoute: Any?, onRouteOpened: () -> Unit) {
         composable<HistoryRoute> {
             TabShell(NavTab.History, goTab) { m ->
                 HistoryScreen(onOpenSession = { nav.navigate(SessionDetailRoute(it)) }, modifier = m)
-            }
-        }
-        composable<WorkoutsRoute> {
-            TabShell(NavTab.Workouts, goTab) { m ->
-                WorkoutsScreen(
-                    onOpenRoutine = { nav.navigate(RoutineEditorRoute(it)) },
-                    onOpenLive = { nav.navigate(LiveWorkoutRoute) { launchSingleTop = true } },
-                    modifier = m,
-                )
             }
         }
         composable<SettingsRoute> {
@@ -206,7 +196,7 @@ private fun CommitNavHost(pendingRoute: Any?, onRouteOpened: () -> Unit) {
             CommitmentDetailScreen(
                 onBack = { nav.popBackStack() },
                 onEditTodo = { nav.navigate(TodoEditorRoute(todoId = it)) },
-                onOpenWorkouts = { nav.popBackStack(); goTab(NavTab.Workouts) },
+                onOpenWorkouts = { nav.popBackStack() },
             )
         }
         composable<RoutineEditorRoute> {

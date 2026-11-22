@@ -7,9 +7,6 @@ import kotlinx.serialization.Serializable
 data class TodayRoute(val newCommitment: Boolean = false)
 
 @Serializable
-object WorkoutsRoute
-
-@Serializable
 data class CommitmentRoute(val id: String)
 
 @Serializable

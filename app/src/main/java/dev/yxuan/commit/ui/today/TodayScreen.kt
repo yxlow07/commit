@@ -1,5 +1,8 @@
 package dev.yxuan.commit.ui.today
 
+import dev.yxuan.commit.ui.workout.workoutSections
+import dev.yxuan.commit.ui.workout.workoutInProgress
+import dev.yxuan.commit.ui.workout.rememberWorkoutSections
 import dev.yxuan.commit.ui.components.SectionHeading
 import dev.yxuan.commit.ui.components.GlyphIcon
 import androidx.compose.foundation.layout.size
@@ -183,7 +186,8 @@ class TodayViewModel(
 @Composable
 fun TodayScreen(
     onOpenCommitment: (String) -> Unit,
-    onOpenWorkouts: () -> Unit,
+    onOpenRoutine: (String) -> Unit,
+    onOpenLive: () -> Unit,
     modifier: Modifier = Modifier,
     startCreating: Boolean = false,
     viewModel: TodayViewModel = viewModel(factory = AppViewModelFactory),
@@ -199,6 +203,7 @@ fun TodayScreen(
     // saved when the finger lifts, and follows the database again otherwise.
     val listState = rememberLazyListState()
     val haptics = LocalHapticFeedback.current
+    val workouts = rememberWorkoutSections(onOpenRoutine)
     var dragging by remember { mutableStateOf<String?>(null) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
     val order = remember { mutableStateListOf<String>() }
@@ -273,7 +278,7 @@ fun TodayScreen(
         // Todo commitments first, then workout commitments under their own heading. Each group is
         // reordered on its own: drag by the handle, or hold anywhere on the row.
         val todoRows = shownRows.filter { it.commitment.type != CommitmentType.WORKOUT }
-        val workoutRows = shownRows.filter { it.commitment.type == CommitmentType.WORKOUT }
+        workoutInProgress(workouts, onOpenLive)
 
         fun group(rows: List<TodayRow>) {
             val groupIds = rows.map { it.commitment.id }
@@ -311,7 +316,7 @@ fun TodayScreen(
                     titleStyle = t.titleDialog.copy(fontWeight = FontWeight.Medium),
                     trailingStyle = t.tabSelected.tnum(),
                     minHeight = 64.dp,
-                    onClick = { if (row.commitment.type == CommitmentType.WORKOUT) onOpenWorkouts() else onOpenCommitment(row.commitment.id) },
+                    onClick = { onOpenCommitment(row.commitment.id) },
                     modifier = Modifier
                         .then(if (lifted) Modifier.zIndex(1f) else Modifier.animateItem())
                         .graphicsLayer {
@@ -333,18 +338,13 @@ fun TodayScreen(
             }
         }
 
-        if (todoRows.isNotEmpty()) {
+        if (state.rows.isNotEmpty()) {
             item(key = "commitments-header") {
                 SectionHeader("Commitments", Glyph.Plus, "New commitment", onAction = { creating = true })
             }
             group(todoRows)
         }
-        if (workoutRows.isNotEmpty()) {
-            item(key = "workouts-header") {
-                SectionHeading("Workouts", Modifier.padding(top = if (todoRows.isEmpty()) 0.dp else Space.huge))
-            }
-            group(workoutRows)
-        }
+        workoutSections(workouts, onOpenRoutine, onOpenLive, topGap = state.rows.isNotEmpty())
     }
 
     if (creating) {
