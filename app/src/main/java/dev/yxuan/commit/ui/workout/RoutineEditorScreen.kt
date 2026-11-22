@@ -1,5 +1,16 @@
 package dev.yxuan.commit.ui.workout
 
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import dev.yxuan.commit.ui.components.WheelPicker
+import dev.yxuan.commit.ui.components.SegmentedControl
+import dev.yxuan.commit.ui.components.DeleteIconButton
+import kotlin.math.roundToInt
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.semantics.customActions
 import dev.yxuan.commit.ui.components.Glyph
 import dev.yxuan.commit.ui.components.GlyphIcon
@@ -197,54 +208,101 @@ private fun describe(ex: ExerciseEntity): String {
     return "$work, rest ${ex.restSeconds} s"
 }
 
+/**
+ * New / edit exercise, laid out like the todo editor: labelled fields, a segmented control for the
+ * kind (reps or timed), numbers on centred scroll wheels with their units, and trash / Cancel /
+ * Save exercise.
+ */
 @Composable
 private fun ExerciseDialog(initial: ExerciseEntity?, onDismiss: () -> Unit, onDelete: (() -> Unit)?, onSave: (ExerciseInput) -> Unit) {
     var name by rememberSaveable { mutableStateOf(initial?.name ?: "") }
-    var sets by rememberSaveable { mutableStateOf((initial?.sets ?: 3).toString()) }
-    var reps by rememberSaveable { mutableStateOf((initial?.reps ?: 8).toString()) }
-    var weight by rememberSaveable { mutableStateOf(initial?.weight?.let { WorkoutFormat.weightValue(it) } ?: "0") }
-    var rest by rememberSaveable { mutableStateOf((initial?.restSeconds ?: 90).toString()) }
+    var sets by rememberSaveable { mutableIntStateOf(initial?.sets ?: 3) }
+    var reps by rememberSaveable { mutableIntStateOf(initial?.reps?.takeIf { it > 0 } ?: 8) }
+    // Weight in tenths of a kilogram, so 62.5 kg is a whole step on the wheel.
+    var weightTenths by rememberSaveable { mutableIntStateOf(((initial?.weight ?: 0.0) * 10).roundToInt()) }
+    var rest by rememberSaveable { mutableIntStateOf(initial?.restSeconds ?: 90) }
     var timed by rememberSaveable { mutableStateOf((initial?.durationSeconds ?: 0) > 0) }
-    var duration by rememberSaveable { mutableStateOf((initial?.durationSeconds ?: 30).toString()) }
-    val valid = name.isNotBlank() && (sets.toIntOrNull() ?: 0) > 0 && (!timed || (duration.toIntOrNull() ?: 0) > 0)
+    var duration by rememberSaveable { mutableIntStateOf(initial?.durationSeconds?.takeIf { it > 0 } ?: 30) }
+    val valid = name.isNotBlank()
 
     CommitDialog(
         title = if (initial == null) "New exercise" else "Edit exercise",
         onDismiss = onDismiss,
         actions = {
-            if (onDelete != null) TextAction("Delete", onClick = onDelete, muted = true)
-            Spacer(Modifier.weight(1f))
+            if (onDelete != null) {
+                DeleteIconButton(onClick = onDelete, contentDescription = "Delete exercise")
+                Spacer(Modifier.weight(1f))
+            }
             TextAction("Cancel", onClick = onDismiss)
-            PrimaryButton("Save", enabled = valid, onClick = {
+            PrimaryButton("Save exercise", enabled = valid, onClick = {
                 onSave(
                     ExerciseInput(
                         name = name,
-                        sets = sets.toIntOrNull() ?: 1,
-                        reps = if (timed) 0 else reps.toIntOrNull() ?: 0,
-                        weight = if (timed) 0.0 else weight.replace(',', '.').toDoubleOrNull() ?: 0.0,
-                        restSeconds = rest.toIntOrNull() ?: 0,
-                        durationSeconds = if (timed) duration.toIntOrNull() else null,
+                        sets = sets,
+                        reps = if (timed) 0 else reps,
+                        weight = if (timed) 0.0 else weightTenths / 10.0,
+                        restSeconds = rest,
+                        durationSeconds = if (timed) duration else null,
                     )
                 )
             })
         },
     ) {
         CommitTextField(name, { name = it }, label = "Name", keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences))
-        Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Timed, like a plank", style = Commit.type.body, color = Commit.colors.ink, modifier = Modifier.weight(1f))
-            CommitSwitch(timed, { timed = it })
+        Column {
+            FieldLabel("Kind")
+            SegmentedControl(listOf(false, true), timed, { timed = it }, label = { if (it) "Timed, like a plank" else "Sets and reps" })
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            NumberField("Sets", sets, { sets = it }, Modifier.weight(1f))
-            if (timed) NumberField("Seconds", duration, { duration = it }, Modifier.weight(1f))
-            else NumberField("Reps", reps, { reps = it }, Modifier.weight(1f))
+        Column {
+            FieldLabel(if (timed) "Sets and time" else "Sets and reps")
+            WheelBand(if (timed) 240.dp else 220.dp) {
+                WheelPicker(stepped(1..10, 1, sets), sets, { sets = it }, label = { it.toString() }, contentDescription = "Sets", visibleRows = 3, showBand = false, width = 56.dp)
+                BandText("×")
+                if (timed) {
+                    WheelPicker(stepped(5..600, 5, duration), duration, { duration = it }, label = { it.toString() }, contentDescription = "Seconds per set", visibleRows = 3, showBand = false, width = 72.dp)
+                    BandText("seconds")
+                } else {
+                    WheelPicker(stepped(1..50, 1, reps), reps, { reps = it }, label = { it.toString() }, contentDescription = "Reps", visibleRows = 3, showBand = false, width = 56.dp)
+                    BandText("reps")
+                }
+            }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (!timed) NumberField("Weight, kg", weight, { weight = it }, Modifier.weight(1f), decimal = true)
-            NumberField("Rest, seconds", rest, { rest = it }, Modifier.weight(1f))
+        if (!timed) {
+            Column {
+                FieldLabel("Weight")
+                WheelBand(160.dp) {
+                    WheelPicker(stepped(0..3000, 25, weightTenths), weightTenths, { weightTenths = it }, label = { WorkoutFormat.weightValue(it / 10.0) }, contentDescription = "Weight in kilograms", visibleRows = 3, showBand = false, width = 80.dp)
+                    BandText("kg")
+                }
+            }
+        }
+        Column {
+            FieldLabel("Rest between sets")
+            WheelBand(200.dp) {
+                WheelPicker(stepped(0..600, 15, rest), rest, { rest = it }, label = { it.toString() }, contentDescription = "Rest in seconds", visibleRows = 3, showBand = false, width = 72.dp)
+                BandText("seconds")
+            }
         }
     }
 }
+
+/** Wheels and their unit words in a row, centred, over one band (as the todo editor's interval). */
+@Composable
+private fun WheelBand(bandWidth: Dp, content: @Composable RowScope.() -> Unit) {
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Box(Modifier.width(bandWidth).height(36.dp).background(Commit.colors.fill, RoundedCornerShape(10.dp)))
+        Row(verticalAlignment = Alignment.CenterVertically, content = content)
+    }
+}
+
+@Composable
+private fun BandText(text: String) {
+    Text(text, style = Commit.type.body, color = Commit.colors.ink, modifier = Modifier.padding(horizontal = 4.dp))
+}
+
+/** [range] in steps of [step], plus [include] if it falls between steps (an older value). */
+private fun stepped(range: IntRange, step: Int, include: Int): List<Int> =
+    (range step step).toMutableList().apply { if (include !in this) { add(include); sort() } }
 
 @Composable
 private fun NumberField(label: String, value: String, onChange: (String) -> Unit, modifier: Modifier = Modifier, decimal: Boolean = false) {
