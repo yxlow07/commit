@@ -6,18 +6,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.glance.ColorFilter
 import androidx.glance.GlanceModifier
-import androidx.glance.GlanceTheme
+import androidx.glance.Image
+import androidx.glance.ImageProvider
 import androidx.glance.LocalContext
+import androidx.glance.LocalSize
 import androidx.glance.action.Action
 import androidx.glance.action.actionParametersOf
+import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.AndroidRemoteViews
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.cornerRadius
-import androidx.glance.appwidget.lazy.LazyColumn
-import androidx.glance.appwidget.lazy.items
 import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
@@ -28,189 +30,265 @@ import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
+import androidx.glance.layout.size
 import androidx.glance.layout.width
+import androidx.glance.semantics.contentDescription
+import androidx.glance.semantics.semantics
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
+import dev.yxuan.commit.MainActivity
 import dev.yxuan.commit.R
 import dev.yxuan.commit.data.db.dao.RoutineSummary
 import dev.yxuan.commit.data.db.entity.WorkoutPhase
 import dev.yxuan.commit.data.repo.LiveWorkout
+import dev.yxuan.commit.domain.Weekdays
 import dev.yxuan.commit.ui.format.WorkoutFormat
+import java.time.LocalDate
 
 /**
- * Workout tab (F5.2): the routine picker when idle, otherwise the current step of the
- * running workout. All state comes from Room; the countdown is a native Chronometer.
+ * Workout layout (Gym tab, spec "Workout widget"): exercise and position, set progress, then
+ * steppers and "Done set" while working, or the countdown with "Add 30 s" / "Skip rest" while
+ * resting. All state comes from Room; the countdown is a native Chronometer.
  */
 @Composable
-fun WorkoutTab(routines: List<RoutineSummary>, live: LiveWorkout?) {
+fun WorkoutPanel(routines: List<RoutineSummary>, live: LiveWorkout?) {
     when {
-        live == null -> RoutinePicker(routines, runningElsewhere = false)
-        routines.none { it.routine.id == live.routine.id } -> RoutinePicker(routines, runningElsewhere = true)
-        else -> LiveStep(live)
+        live == null || routines.none { it.routine.id == live.routine.id } -> Idle(routines, runningElsewhere = live != null)
+        else -> Live(live)
     }
 }
 
+/** No active workout: the routine planned for today (or the first), Start, and "Choose another". */
 @Composable
-private fun RoutinePicker(routines: List<RoutineSummary>, runningElsewhere: Boolean) {
-    if (routines.isEmpty()) {
-        Centered("Add a routine in the app to start a workout")
+private fun Idle(routines: List<RoutineSummary>, runningElsewhere: Boolean) {
+    val c = LocalWidgetColors.current
+    val usable = routines.filter { it.exerciseCount > 0 }
+    if (usable.isEmpty()) {
+        Text("Add a routine in the app to start a workout.", style = TextStyle(color = c.textStrong, fontSize = 15.sp), modifier = GlanceModifier.padding(end = 10.dp))
         return
     }
-    Column(GlanceModifier.fillMaxSize()) {
-        if (runningElsewhere) Caption("Another workout is running; starting one ends it.")
-        LazyColumn(GlanceModifier.fillMaxSize()) {
-            items(routines, itemId = { it.routine.id.hashCode().toLong() }) { r ->
-                Row(GlanceModifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(GlanceModifier.defaultWeight()) {
-                        Text(r.routine.name, maxLines = 1, style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 15.sp, fontWeight = FontWeight.Medium))
-                        Caption(if (r.exerciseCount == 1) "1 exercise" else "${r.exerciseCount} exercises")
-                    }
-                    if (r.exerciseCount > 0) {
-                        Pill("Start", actionRunCallback<StartWorkoutAction>(actionParametersOf(RoutineIdParam to r.routine.id)), primary = true)
-                    }
-                }
-            }
+    val today = LocalDate.now()
+    val pick = usable.firstOrNull { Weekdays.isPlanned(it.routine.plannedDays, today) } ?: usable.first()
+    val planned = Weekdays.isPlanned(pick.routine.plannedDays, today)
+    Column(GlanceModifier.fillMaxSize().padding(end = 10.dp)) {
+        Text(pick.routine.name, maxLines = 1, style = TextStyle(color = c.ink, fontSize = 17.sp, fontWeight = FontWeight.Bold))
+        Text(
+            listOfNotNull(if (planned) "Planned today" else null, if (pick.exerciseCount == 1) "1 exercise" else "${pick.exerciseCount} exercises").joinToString(", ") +
+                if (runningElsewhere) ". Starting ends the workout in progress." else "",
+            maxLines = 2,
+            style = TextStyle(color = c.muted, fontSize = 14.sp),
+        )
+        Spacer(GlanceModifier.defaultWeight())
+        WidgetButton("Start ${pick.routine.name}", actionRunCallback<StartWorkoutAction>(actionParametersOf(RoutineIdParam to pick.routine.id)), primary = true, modifier = GlanceModifier.fillMaxWidth())
+        if (usable.size > 1) {
+            Text(
+                "Choose another",
+                style = TextStyle(color = c.ink, fontSize = 15.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center),
+                modifier = GlanceModifier.fillMaxWidth().padding(vertical = 12.dp)
+                    .clickable(actionStartActivity<MainActivity>(actionParametersOf(OpenWorkoutsParam to true))),
+            )
         }
     }
 }
 
-@Composable
-private fun LiveStep(live: LiveWorkout) {
-    val s = live.state
-    when (s.phase) {
-        WorkoutPhase.COMPLETE -> Column(GlanceModifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalAlignment = Alignment.CenterVertically) {
-            Text("Workout complete", style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 17.sp, fontWeight = FontWeight.Bold))
-            Caption(WorkoutFormat.summary(live))
-            Spacer(GlanceModifier.height(8.dp))
-            Pill("Done", actionRunCallback<EndWorkoutAction>(), primary = true)
-        }
+/** Below this height (3x2 / 4x2) the workout panel uses its compact form. */
+internal val COMPACT_WORKOUT_HEIGHT = 270.dp
 
-        WorkoutPhase.READY -> Column(GlanceModifier.fillMaxSize()) {
-            Header(live)
-            Spacer(GlanceModifier.height(6.dp))
-            if (live.isTimed) {
-                Text("${live.exercise?.durationSeconds} s", style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 28.sp, fontWeight = FontWeight.Bold))
+@Composable
+private fun Live(live: LiveWorkout) {
+    val c = LocalWidgetColors.current
+    val s = live.state
+    val compact = LocalSize.current.height < COMPACT_WORKOUT_HEIGHT
+    if (compact && s.phase != WorkoutPhase.COMPLETE) {
+        CompactLive(live)
+        return
+    }
+    Column(GlanceModifier.fillMaxSize().padding(end = 10.dp)) {
+        if (s.phase == WorkoutPhase.COMPLETE) {
+            Text("Workout done", style = TextStyle(color = c.ink, fontSize = 30.sp, fontFamily = WidgetLight))
+            Text(WorkoutFormat.summary(live), style = TextStyle(color = c.muted, fontSize = 14.sp))
+            Spacer(GlanceModifier.height(16.dp))
+            Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                TextButton("Open summary", actionStartActivity<MainActivity>(actionParametersOf(OpenWorkoutParam to true)))
+                Spacer(GlanceModifier.height(16.dp))
+                WidgetButton("Done", actionRunCallback<EndWorkoutAction>(), primary = false)
+            }
+            return@Column
+        }
+        val ex = live.exercise ?: return@Column
+        Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+            Text(ex.name, maxLines = 1, style = TextStyle(color = c.ink, fontSize = 17.sp, fontWeight = FontWeight.Bold), modifier = GlanceModifier.defaultWeight())
+            Text(WorkoutFormat.position(live), maxLines = 1, style = TextStyle(color = c.muted, fontSize = 13.sp, fontWeight = FontWeight.Medium))
+        }
+        Spacer(GlanceModifier.height(12.dp))
+        SetProgress(s.setNo, ex.sets)
+        Spacer(GlanceModifier.height(14.dp))
+        when (s.phase) {
+            WorkoutPhase.READY -> if (live.isTimed) {
+                Text("${ex.durationSeconds} s", style = TextStyle(color = c.ink, fontSize = 48.sp, fontFamily = WidgetLight, textAlign = TextAlign.Center), modifier = GlanceModifier.fillMaxWidth())
+                Spacer(GlanceModifier.height(16.dp))
+                WidgetButton("Start set", actionRunCallback<DoneSetAction>(), primary = true, modifier = GlanceModifier.fillMaxWidth())
             } else {
                 Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Stepper("${s.reps}", "reps", StepRepsAction::class.java, GlanceModifier.defaultWeight())
-                    Spacer(GlanceModifier.width(8.dp))
-                    Stepper(WorkoutFormat.weight(s.weight), "", StepWeightAction::class.java, GlanceModifier.defaultWeight())
+                    Stepper("${s.reps}", "reps", StepRepsAction::class.java, "Fewer reps", "More reps", GlanceModifier.defaultWeight())
+                    Spacer(GlanceModifier.width(12.dp))
+                    Stepper(WorkoutFormat.weightValue(s.weight), "kg", StepWeightAction::class.java, "Less weight", "More weight", GlanceModifier.defaultWeight())
                 }
+                Spacer(GlanceModifier.height(16.dp))
+                WidgetButton("Done set", actionRunCallback<DoneSetAction>(), primary = true, modifier = GlanceModifier.fillMaxWidth())
             }
-            Spacer(GlanceModifier.defaultWeight())
-            Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Pill(if (live.isTimed) "Start" else "Done set", actionRunCallback<DoneSetAction>(), primary = true, modifier = GlanceModifier.defaultWeight())
-                Spacer(GlanceModifier.width(8.dp))
-                Pill("End", actionRunCallback<EndWorkoutAction>(), primary = false)
-            }
-        }
-
-        WorkoutPhase.REST, WorkoutPhase.WORK -> Column(GlanceModifier.fillMaxSize()) {
-            if (s.phase == WorkoutPhase.WORK) Header(live) else Row(GlanceModifier.fillMaxWidth()) {
-                Text("Rest", style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 15.sp, fontWeight = FontWeight.Bold), modifier = GlanceModifier.defaultWeight())
-                live.upNext?.let { Caption("Next: $it") }
-            }
-            Box(GlanceModifier.fillMaxWidth().defaultWeight(), contentAlignment = Alignment.Center) {
+            WorkoutPhase.REST, WorkoutPhase.WORK -> {
                 s.phaseEndsAt?.let { Countdown(it) }
-            }
-            Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                if (s.phase == WorkoutPhase.REST) {
-                    Pill("+30s", actionRunCallback<AddRestAction>(), primary = false, modifier = GlanceModifier.defaultWeight())
-                    Spacer(GlanceModifier.width(8.dp))
-                    Pill("Skip rest", actionRunCallback<SkipAction>(), primary = true, modifier = GlanceModifier.defaultWeight())
-                } else {
-                    Pill("Done early", actionRunCallback<SkipAction>(), primary = true, modifier = GlanceModifier.defaultWeight())
+                val under = if (s.phase == WorkoutPhase.REST) WorkoutFormat.restThen(live)?.let { "Rest, then $it" } ?: "Rest" else "Hold, then rest"
+                Text(under, maxLines = 1, style = TextStyle(color = c.muted, fontSize = 14.sp, textAlign = TextAlign.Center), modifier = GlanceModifier.fillMaxWidth())
+                Spacer(GlanceModifier.height(16.dp))
+                Row(GlanceModifier.fillMaxWidth()) {
+                    if (s.phase == WorkoutPhase.REST) {
+                        WidgetButton("Add 30 s", actionRunCallback<AddRestAction>(), primary = false, modifier = GlanceModifier.defaultWeight())
+                        Spacer(GlanceModifier.width(8.dp))
+                        WidgetButton("Skip rest", actionRunCallback<SkipAction>(), primary = true, modifier = GlanceModifier.defaultWeight())
+                    } else {
+                        WidgetButton("Done early", actionRunCallback<SkipAction>(), primary = true, modifier = GlanceModifier.defaultWeight())
+                    }
                 }
-                Spacer(GlanceModifier.width(8.dp))
-                Pill("End", actionRunCallback<EndWorkoutAction>(), primary = false)
             }
+            WorkoutPhase.COMPLETE -> Unit
         }
     }
 }
 
+/**
+ * Short widget: one header line (exercise or "Rest, then set 2", with "Set 1 of 2"), then the
+ * steppers or a smaller countdown, then a 44 dp button row. Same actions as the full panel.
+ */
 @Composable
-private fun Header(live: LiveWorkout) {
+private fun CompactLive(live: LiveWorkout) {
+    val c = LocalWidgetColors.current
+    val s = live.state
+    val ex = live.exercise ?: return
+    val resting = s.phase == WorkoutPhase.REST
+    val title = when {
+        resting -> WorkoutFormat.restThen(live)?.let { "Rest, then $it" } ?: "Rest"
+        s.phase == WorkoutPhase.WORK -> "${ex.name}, hold"
+        else -> ex.name
+    }
+    Column(GlanceModifier.fillMaxSize().padding(end = 10.dp)) {
+        Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+            Text(title, maxLines = 1, style = TextStyle(color = c.ink, fontSize = 16.sp, fontWeight = FontWeight.Bold), modifier = GlanceModifier.defaultWeight())
+            Text("Set ${s.setNo} of ${ex.sets}", maxLines = 1, style = TextStyle(color = c.muted, fontSize = 13.sp))
+        }
+        Spacer(GlanceModifier.height(6.dp))
+        when (s.phase) {
+            WorkoutPhase.READY -> {
+                if (live.isTimed) {
+                    Text("${ex.durationSeconds} s", style = TextStyle(color = c.ink, fontSize = 28.sp, fontFamily = WidgetLight))
+                } else {
+                    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Stepper("${s.reps}", "", StepRepsAction::class.java, "Fewer reps", "More reps", GlanceModifier.defaultWeight())
+                        Spacer(GlanceModifier.width(8.dp))
+                        Stepper(WorkoutFormat.weightValue(s.weight), "", StepWeightAction::class.java, "Less weight", "More weight", GlanceModifier.defaultWeight())
+                    }
+                }
+                Spacer(GlanceModifier.defaultWeight())
+                WidgetButton(if (live.isTimed) "Start set" else "Done set", actionRunCallback<DoneSetAction>(), primary = true, modifier = GlanceModifier.fillMaxWidth(), height = 44.dp)
+            }
+            WorkoutPhase.REST, WorkoutPhase.WORK -> {
+                s.phaseEndsAt?.let { Countdown(it, small = true) }
+                Spacer(GlanceModifier.defaultWeight())
+                Row(GlanceModifier.fillMaxWidth()) {
+                    if (resting) {
+                        WidgetButton("Add 30 s", actionRunCallback<AddRestAction>(), primary = false, modifier = GlanceModifier.defaultWeight(), height = 44.dp)
+                        Spacer(GlanceModifier.width(8.dp))
+                        WidgetButton("Skip rest", actionRunCallback<SkipAction>(), primary = true, modifier = GlanceModifier.defaultWeight(), height = 44.dp)
+                    } else {
+                        WidgetButton("Done early", actionRunCallback<SkipAction>(), primary = true, modifier = GlanceModifier.defaultWeight(), height = 44.dp)
+                    }
+                }
+            }
+            WorkoutPhase.COMPLETE -> Unit
+        }
+    }
+}
+
+/** One 4 dp segment per set (done `ink`, current `faint`, future `track`) and "Set 3 of 4". */
+@Composable
+private fun SetProgress(setNo: Int, total: Int) {
+    val c = LocalWidgetColors.current
     Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            live.exercise?.name ?: live.routine.name,
-            maxLines = 1,
-            style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 15.sp, fontWeight = FontWeight.Bold),
-            modifier = GlanceModifier.defaultWeight(),
-        )
-        Caption(WorkoutFormat.setProgress(live))
+        Row(GlanceModifier.defaultWeight()) {
+            for (n in 1..total.coerceAtLeast(1)) {
+                if (n > 1) Spacer(GlanceModifier.width(4.dp))
+                val color = when {
+                    n < setNo -> c.ink
+                    n == setNo -> c.faint
+                    else -> c.track
+                }
+                Box(GlanceModifier.defaultWeight().height(4.dp).cornerRadius(2.dp).background(color)) {}
+            }
+        }
+        Spacer(GlanceModifier.width(10.dp))
+        Text("Set $setNo of $total", style = TextStyle(color = c.muted, fontSize = 13.sp))
     }
 }
 
 /** Live countdown: the system Chronometer ticks every second at no widget-update cost (F5.6). */
 @Composable
-private fun Countdown(endsAt: Long) {
+private fun Countdown(endsAt: Long, small: Boolean = false) {
     val context = LocalContext.current
+    val c = LocalWidgetColors.current
     val remaining = endsAt - System.currentTimeMillis()
-    val views = RemoteViews(context.packageName, R.layout.widget_chronometer).apply {
+    val layout = if (small) R.layout.widget_chronometer_small else R.layout.widget_chronometer
+    val views = RemoteViews(context.packageName, layout).apply {
         setChronometer(R.id.chronometer, SystemClock.elapsedRealtime() + remaining, null, true)
         setChronometerCountDown(R.id.chronometer, true)
-        setTextColor(R.id.chronometer, GlanceTheme.colors.onSurface.getColor(context).toArgb())
+        setTextColor(R.id.chronometer, c.ink.getColor(context).toArgb())
     }
-    AndroidRemoteViews(views)
+    // Fixed height: a RemoteViews child otherwise takes all the space left and pushes the buttons out.
+    AndroidRemoteViews(views, modifier = GlanceModifier.fillMaxWidth().height(if (small) 46.dp else 86.dp))
 }
 
-/** [−] value [+] stepper; [action] receives delta ±1 (weight steps are 2.5 kg). */
+/** [−] value/unit [+]: 44 dp `fill` circles, value 28 sp light, unit 12 sp `muted` under it. */
 @Composable
-private fun Stepper(value: String, unit: String, action: Class<out ActionCallback>, modifier: GlanceModifier) {
-    Row(
-        modifier.cornerRadius(16.dp).background(GlanceTheme.colors.secondaryContainer).padding(2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        StepButton("−", actionRunCallback(action, actionParametersOf(DeltaParam to -1)))
-        Text(
-            if (unit.isEmpty()) value else "$value $unit",
-            maxLines = 1,
-            style = TextStyle(color = GlanceTheme.colors.onSecondaryContainer, fontSize = 15.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center),
-            modifier = GlanceModifier.defaultWeight(),
-        )
-        StepButton("+", actionRunCallback(action, actionParametersOf(DeltaParam to 1)))
+private fun Stepper(value: String, unit: String, action: Class<out ActionCallback>, minusLabel: String, plusLabel: String, modifier: GlanceModifier) {
+    val c = LocalWidgetColors.current
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        StepButton(R.drawable.widget_minus, minusLabel, actionRunCallback(action, actionParametersOf(DeltaParam to -1)))
+        Column(GlanceModifier.defaultWeight(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(value, maxLines = 1, style = TextStyle(color = c.ink, fontSize = 28.sp, fontFamily = WidgetLight, textAlign = TextAlign.Center))
+            if (unit.isNotEmpty()) Text(unit, style = TextStyle(color = c.muted, fontSize = 12.sp, textAlign = TextAlign.Center))
+        }
+        StepButton(R.drawable.widget_plus, plusLabel, actionRunCallback(action, actionParametersOf(DeltaParam to 1)))
     }
 }
 
 @Composable
-private fun StepButton(label: String, action: Action) {
+private fun StepButton(icon: Int, label: String, action: Action) {
+    val c = LocalWidgetColors.current
     Box(
-        GlanceModifier.width(40.dp).height(36.dp).cornerRadius(14.dp).background(GlanceTheme.colors.surface).clickable(action),
+        GlanceModifier.size(44.dp).cornerRadius(22.dp).background(c.fill).clickable(action).semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 18.sp, fontWeight = FontWeight.Bold))
+        Image(ImageProvider(icon), contentDescription = null, colorFilter = ColorFilter.tint(c.ink), modifier = GlanceModifier.size(20.dp))
     }
 }
 
+/** Primary (`ink`) or secondary (`fill`) button, 48 dp tall, fully rounded. */
 @Composable
-internal fun Pill(text: String, action: Action, primary: Boolean, modifier: GlanceModifier = GlanceModifier) {
+internal fun WidgetButton(text: String, action: Action, primary: Boolean, modifier: GlanceModifier = GlanceModifier, height: androidx.compose.ui.unit.Dp = 48.dp) {
+    val c = LocalWidgetColors.current
     Box(
-        modifier.height(36.dp).cornerRadius(18.dp)
-            .background(if (primary) GlanceTheme.colors.primary else GlanceTheme.colors.secondaryContainer)
-            .padding(horizontal = 14.dp)
-            .clickable(action),
+        modifier.height(height).cornerRadius(height / 2).background(if (primary) c.ink else c.fill).padding(horizontal = 18.dp).clickable(action),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text,
-            maxLines = 1,
-            style = TextStyle(
-                color = if (primary) GlanceTheme.colors.onPrimary else GlanceTheme.colors.onSecondaryContainer,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-            ),
-        )
+        Text(text, maxLines = 1, style = TextStyle(color = if (primary) c.onInk else c.ink, fontSize = 15.sp, fontWeight = FontWeight.Medium))
     }
 }
 
+/** Text button: no background, `ink` Bold. */
 @Composable
-private fun Caption(text: String) {
-    Text(text, maxLines = 1, style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp))
-}
-
-@Composable
-private fun Centered(text: String) {
-    Box(GlanceModifier.fillMaxSize(), contentAlignment = Alignment.Center) { Caption(text) }
+private fun TextButton(text: String, action: Action) {
+    val c = LocalWidgetColors.current
+    Text(text, style = TextStyle(color = c.ink, fontSize = 15.sp, fontWeight = FontWeight.Bold), modifier = GlanceModifier.padding(vertical = 12.dp).clickable(action))
 }

@@ -14,9 +14,11 @@ import {
 import { supabase } from "@/lib/data/supabase";
 import { pad } from "@/lib/domain/dates";
 import {
+  BUILTIN_AUTOMATIC,
   BUILTIN_DARK,
-  BUILTIN_DYNAMIC,
+  BUILTIN_LEGACY_DYNAMIC,
   BUILTIN_LIGHT,
+  cssColor,
   parseTheme,
   parseThemeOrNull,
   THEME_DEFAULTS,
@@ -182,22 +184,22 @@ function ThemeSection({
         <p className="text-xs font-medium text-fg-muted">Built-in</p>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <ThemeOption
-            name="Material You"
-            subtitle="Default palette"
-            selected={!activeId || activeId === BUILTIN_DYNAMIC}
+            name="Automatic"
+            subtitle="Light or dark, following the system"
+            selected={!activeId || activeId === BUILTIN_AUTOMATIC || activeId === BUILTIN_LEGACY_DYNAMIC}
             onSelect={() => onSelect(null)}
-            spec={THEME_DEFAULTS.spec("Material You")}
+            spec={THEME_DEFAULTS.spec("Automatic")}
           />
           <ThemeOption
             name="Light"
-            subtitle="Forced light"
+            subtitle="Always light"
             selected={activeId === BUILTIN_LIGHT}
             onSelect={() => onSelect(BUILTIN_LIGHT)}
             spec={THEME_DEFAULTS.spec("Light")}
           />
           <ThemeOption
             name="Dark"
-            subtitle="Forced dark"
+            subtitle="Always dark"
             selected={activeId === BUILTIN_DARK}
             onSelect={() => onSelect(BUILTIN_DARK)}
             spec={THEME_DEFAULTS.spec("Dark")}
@@ -225,7 +227,7 @@ function ThemeSection({
                       <p className="font-medium">{t.name}</p>
                       {spec && (
                         <p className="text-xs text-fg-muted">
-                          {spec.font} · {spec.cornerRadius}px
+                          {spec.font}, corners {spec.cornerRadius}
                         </p>
                       )}
                     </div>
@@ -233,9 +235,9 @@ function ThemeSection({
                   <div className="flex items-center gap-2">
                     {spec && (
                       <div className="flex gap-1.5 mr-2">
-                        <span className="h-4 w-4 rounded-full border border-line" style={{ background: spec.light.primary }} />
-                        <span className="h-4 w-4 rounded-full border border-line" style={{ background: spec.light.secondary }} />
-                        <span className="h-4 w-4 rounded-full border border-line" style={{ background: spec.light.background }} />
+                        <span className="h-4 w-4 rounded-full border border-line" style={{ background: cssColor(spec.light.ink) }} />
+                        <span className="h-4 w-4 rounded-full border border-line" style={{ background: cssColor(spec.light.muted) }} />
+                        <span className="h-4 w-4 rounded-full border border-line" style={{ background: cssColor(spec.light.surface) }} />
                       </div>
                     )}
                     <button
@@ -302,8 +304,8 @@ function ThemeOption({
       <div className="flex items-center justify-between">
         <span className="text-sm font-semibold">{name}</span>
         <div className="flex gap-1">
-          <span className="h-3.5 w-3.5 rounded-full border border-line" style={{ background: spec.light.primary }} />
-          <span className="h-3.5 w-3.5 rounded-full border border-line" style={{ background: spec.light.secondary }} />
+          <span className="h-3.5 w-3.5 rounded-full border border-line" style={{ background: cssColor(spec.light.ink) }} />
+          <span className="h-3.5 w-3.5 rounded-full border border-line" style={{ background: cssColor(spec.dark.surface) }} />
         </div>
       </div>
       <span className="text-xs text-fg-muted">{subtitle}</span>

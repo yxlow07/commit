@@ -30,11 +30,11 @@ data class LiveWorkout(
     val isTimed: Boolean get() = (exercise?.durationSeconds ?: 0) > 0
     val volume: Double get() = WorkoutEngine.volume(sets.map { it.reps to it.weight })
 
-    /** What comes after the current rest, e.g. "Bench press · set 3". */
+    /** What comes after the current rest, e.g. "Bench press, set 3". */
     val upNext: String?
         get() {
             val ex = exercise ?: return null
-            return if (state.setNo < ex.sets) "${ex.name} · set ${state.setNo + 1}"
+            return if (state.setNo < ex.sets) "${ex.name}, set ${state.setNo + 1}"
             else exercises.getOrNull(state.exerciseIndex + 1)?.name
         }
 }

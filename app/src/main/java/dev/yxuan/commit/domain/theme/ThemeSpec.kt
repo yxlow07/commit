@@ -8,39 +8,29 @@ import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
 
 /**
- * Themes (F9): a JSON file of design values only (colours, corner radius, font family). The same
- * format and rules are implemented on the web (web/lib/domain/theme.ts); see themes/README.md.
+ * Themes (F9): a JSON file of design values only. Format v2 uses the design spec's tokens
+ * (app/App Design Spec.md, "Tokens"); v1 files (Material keys, M9) are still read and mapped.
+ * The same format and rules are implemented on the web (web/lib/domain/theme.ts); see themes/README.md.
  */
 
 enum class ThemeFont(val key: String) { DEFAULT("default"), SERIF("serif"), MONO("mono"), ROUNDED("rounded") }
 
-/** One colour set (light or dark); every colour is ARGB. */
+/** One colour set (light or dark), ARGB ints, named after the design spec's tokens. */
 data class ThemeColors(
-    val primary: Int, val onPrimary: Int, val primaryContainer: Int, val onPrimaryContainer: Int,
-    val secondary: Int, val onSecondary: Int, val secondaryContainer: Int, val onSecondaryContainer: Int,
-    val background: Int, val onBackground: Int, val surface: Int, val onSurface: Int,
-    val surfaceVariant: Int, val onSurfaceVariant: Int, val outline: Int, val error: Int, val onError: Int,
+    val ink: Int, val onInk: Int, val textStrong: Int, val muted: Int, val faint: Int,
+    val track: Int, val fill: Int, val surface: Int, val background: Int, val danger: Int, val scrim: Int,
 ) {
     fun toMap(): Map<String, Int> = mapOf(
-        "primary" to primary, "onPrimary" to onPrimary, "primaryContainer" to primaryContainer, "onPrimaryContainer" to onPrimaryContainer,
-        "secondary" to secondary, "onSecondary" to onSecondary, "secondaryContainer" to secondaryContainer, "onSecondaryContainer" to onSecondaryContainer,
-        "background" to background, "onBackground" to onBackground, "surface" to surface, "onSurface" to onSurface,
-        "surfaceVariant" to surfaceVariant, "onSurfaceVariant" to onSurfaceVariant, "outline" to outline, "error" to error, "onError" to onError,
+        "ink" to ink, "onInk" to onInk, "textStrong" to textStrong, "muted" to muted, "faint" to faint,
+        "track" to track, "fill" to fill, "surface" to surface, "background" to background, "danger" to danger, "scrim" to scrim,
     )
 
     companion object {
-        val KEYS = listOf(
-            "primary", "onPrimary", "primaryContainer", "onPrimaryContainer",
-            "secondary", "onSecondary", "secondaryContainer", "onSecondaryContainer",
-            "background", "onBackground", "surface", "onSurface",
-            "surfaceVariant", "onSurfaceVariant", "outline", "error", "onError",
-        )
+        val KEYS = listOf("ink", "onInk", "textStrong", "muted", "faint", "track", "fill", "surface", "background", "danger", "scrim")
 
         fun fromMap(m: Map<String, Int>) = ThemeColors(
-            m.getValue("primary"), m.getValue("onPrimary"), m.getValue("primaryContainer"), m.getValue("onPrimaryContainer"),
-            m.getValue("secondary"), m.getValue("onSecondary"), m.getValue("secondaryContainer"), m.getValue("onSecondaryContainer"),
-            m.getValue("background"), m.getValue("onBackground"), m.getValue("surface"), m.getValue("onSurface"),
-            m.getValue("surfaceVariant"), m.getValue("onSurfaceVariant"), m.getValue("outline"), m.getValue("error"), m.getValue("onError"),
+            m.getValue("ink"), m.getValue("onInk"), m.getValue("textStrong"), m.getValue("muted"), m.getValue("faint"),
+            m.getValue("track"), m.getValue("fill"), m.getValue("surface"), m.getValue("background"), m.getValue("danger"), m.getValue("scrim"),
         )
     }
 }
@@ -49,28 +39,25 @@ data class ThemeSpec(
     val name: String,
     val light: ThemeColors,
     val dark: ThemeColors,
+    /** Corner radius of the widget and dialogs, dp. */
     val cornerRadius: Float,
     val font: ThemeFont,
 )
 
-/** Commit's own palette (same values as the web's default tokens). Missing theme values come from here. */
+/** The design spec's Light and Dark palettes. Missing theme values come from here. */
 object ThemeDefaults {
-    const val CORNER_RADIUS = 16f
+    const val CORNER_RADIUS = 28f
 
     val light = ThemeColors(
-        primary = 0xFF4F5BD5.toInt(), onPrimary = 0xFFFFFFFF.toInt(), primaryContainer = 0xFFDFE2FF.toInt(), onPrimaryContainer = 0xFF0B1468.toInt(),
-        secondary = 0xFF5C5D72.toInt(), onSecondary = 0xFFFFFFFF.toInt(), secondaryContainer = 0xFFE1E0F9.toInt(), onSecondaryContainer = 0xFF191A2C.toInt(),
-        background = 0xFFF7F7FB.toInt(), onBackground = 0xFF1B1B21.toInt(), surface = 0xFFFFFFFF.toInt(), onSurface = 0xFF1B1B21.toInt(),
-        surfaceVariant = 0xFFF0F0F6.toInt(), onSurfaceVariant = 0xFF5F5F6B.toInt(), outline = 0xFFE2E2EA.toInt(),
-        error = 0xFFC62828.toInt(), onError = 0xFFFFFFFF.toInt(),
+        ink = 0xFF1F2123.toInt(), onInk = 0xFFFFFFFF.toInt(), textStrong = 0xFF45474B.toInt(), muted = 0xFF6B6E73.toInt(),
+        faint = 0xFF9C9FA4.toInt(), track = 0xFFE3E4E6.toInt(), fill = 0xFFEEEFF0.toInt(), surface = 0xFFFFFFFF.toInt(),
+        background = 0xFFF6F6F5.toInt(), danger = 0xFFB42318.toInt(), scrim = 0x731F2123,
     )
 
     val dark = ThemeColors(
-        primary = 0xFFAAB3FF.toInt(), onPrimary = 0xFF141A5C.toInt(), primaryContainer = 0xFF343A73.toInt(), onPrimaryContainer = 0xFFDFE2FF.toInt(),
-        secondary = 0xFFC5C4DD.toInt(), onSecondary = 0xFF2E2F42.toInt(), secondaryContainer = 0xFF444559.toInt(), onSecondaryContainer = 0xFFE1E0F9.toInt(),
-        background = 0xFF121216.toInt(), onBackground = 0xFFE7E7EE.toInt(), surface = 0xFF1B1B21.toInt(), onSurface = 0xFFE7E7EE.toInt(),
-        surfaceVariant = 0xFF26262E.toInt(), onSurfaceVariant = 0xFFA1A1AD.toInt(), outline = 0xFF2F2F39.toInt(),
-        error = 0xFFFF8A80.toInt(), onError = 0xFF690005.toInt(),
+        ink = 0xFFECEDEE.toInt(), onInk = 0xFF17181A.toInt(), textStrong = 0xFFC9CBCE.toInt(), muted = 0xFFA3A6AB.toInt(),
+        faint = 0xFF6B6E73.toInt(), track = 0xFF2E3033.toInt(), fill = 0xFF2A2C2F.toInt(), surface = 0xFF17181A.toInt(),
+        background = 0xFF0F1011.toInt(), danger = 0xFFF4877B.toInt(), scrim = 0x99000000.toInt(),
     )
 
     fun spec(name: String) = ThemeSpec(name, light, dark, CORNER_RADIUS, ThemeFont.DEFAULT)
@@ -86,11 +73,18 @@ sealed interface ThemeParseResult {
  * reported as one plain sentence naming the field.
  */
 object ThemeParser {
-    const val SCHEMA_VERSION = 1
+    const val SCHEMA_VERSION = 2
     const val MAX_BYTES = 32 * 1024
     const val MAX_NAME = 40
-    const val MAX_RADIUS = 32.0
+    const val MAX_RADIUS = 40.0
     private val COLOR = Regex("^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$")
+
+    /** v1 (Material) key → v2 token, so themes imported before v2 keep working. */
+    private val V1_KEYS = mapOf(
+        "ink" to "onSurface", "onInk" to "surface", "textStrong" to "onSurface", "muted" to "onSurfaceVariant",
+        "faint" to "outline", "track" to "outline", "fill" to "surfaceVariant", "surface" to "surface",
+        "background" to "background", "danger" to "error",
+    )
 
     fun parse(text: String): ThemeParseResult {
         if (text.toByteArray().size > MAX_BYTES) return invalid("The file is larger than 32 KB; a theme is a few hundred bytes.")
@@ -99,13 +93,14 @@ object ThemeParser {
         } catch (e: Exception) {
             return invalid("This isn't valid JSON.")
         }
-        if (root !is JsonObject) return invalid("A theme must be a JSON object, like { \"schemaVersion\": 1, \"name\": \"Ocean\" }.")
+        if (root !is JsonObject) return invalid("A theme must be a JSON object, like { \"schemaVersion\": 2, \"name\": \"Ocean\" }.")
 
         val errors = mutableListOf<String>()
 
-        when (val v = root["schemaVersion"]) {
-            null -> errors += "schemaVersion is missing; this app reads version $SCHEMA_VERSION."
-            else -> if ((v as? JsonPrimitive)?.intOrNull != SCHEMA_VERSION) errors += "schemaVersion ${v} isn't supported; this app reads version $SCHEMA_VERSION."
+        val version = (root["schemaVersion"] as? JsonPrimitive)?.takeIf { !it.isString }?.intOrNull
+        when {
+            root["schemaVersion"] == null -> errors += "schemaVersion is missing; this app reads version $SCHEMA_VERSION."
+            version != 1 && version != SCHEMA_VERSION -> errors += "schemaVersion ${root["schemaVersion"]} isn't supported; this app reads version $SCHEMA_VERSION."
         }
 
         val name = (root["name"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.trim()
@@ -116,16 +111,18 @@ object ThemeParser {
             name.length > MAX_NAME -> errors += "name is longer than $MAX_NAME characters."
         }
 
-        val light = colors(root["light"], "light", ThemeDefaults.light, errors)
-        val dark = colors(root["dark"], "dark", ThemeDefaults.dark, errors)
+        val v1 = version == 1
+        if (root["light"] == null && root["dark"] == null) errors += "This file has no colours section (light or dark)."
+        val light = colors(root["light"], "light", ThemeDefaults.light, v1, errors)
+        val dark = colors(root["dark"], "dark", ThemeDefaults.dark, v1, errors)
 
         var radius = ThemeDefaults.CORNER_RADIUS
         when (val shape = root["shape"]) {
             null -> Unit
-            !is JsonObject -> errors += "shape must be an object, like { \"cornerRadius\": 16 }."
+            !is JsonObject -> errors += "shape must be an object, like { \"cornerRadius\": 28 }."
             else -> shape["cornerRadius"]?.let { r ->
                 val value = (r as? JsonPrimitive)?.takeIf { !it.isString }?.doubleOrNull
-                if (value == null || value < 0 || value > MAX_RADIUS) errors += "shape.cornerRadius must be a number from 0 to 32."
+                if (value == null || value < 0 || value > MAX_RADIUS) errors += "shape.cornerRadius must be a number from 0 to 40."
                 else radius = value.toFloat()
             }
         }
@@ -145,18 +142,19 @@ object ThemeParser {
     /** Parses a stored theme; null if it no longer validates (callers then fall back to the default). */
     fun parseOrNull(text: String): ThemeSpec? = (parse(text) as? ThemeParseResult.Ok)?.spec
 
-    private fun colors(element: JsonElement?, path: String, defaults: ThemeColors, errors: MutableList<String>): ThemeColors {
+    private fun colors(element: JsonElement?, path: String, defaults: ThemeColors, v1: Boolean, errors: MutableList<String>): ThemeColors {
         if (element == null) return defaults
         if (element !is JsonObject) {
-            errors += "$path must be an object of colours, like { \"primary\": \"#1E5AA8\" }."
+            errors += "$path must be an object of colours, like { \"ink\": \"#1F2123\" }."
             return defaults
         }
         val values = defaults.toMap().toMutableMap()
         for (key in ThemeColors.KEYS) {
-            val raw = element[key] ?: continue
+            val sourceKey = if (v1) V1_KEYS[key] ?: continue else key
+            val raw = element[sourceKey] ?: continue
             val text = (raw as? JsonPrimitive)?.takeIf { it.isString }?.content
             val argb = text?.let(::parseColor)
-            if (argb == null) errors += "$path.$key: $raw is not a colour like #1E5AA8."
+            if (argb == null) errors += "$path.$sourceKey: $raw is not a colour like #1F2123."
             else values[key] = argb
         }
         return ThemeColors.fromMap(values)
@@ -175,35 +173,35 @@ object ThemeParser {
 /** How a theme picks light or dark. */
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
-/** The theme in use: wallpaper colours (Material You) or a fixed spec. */
-sealed interface ActiveTheme {
-    val id: String
-
-    data object Dynamic : ActiveTheme {
-        override val id = BuiltinThemes.DYNAMIC
+/** The theme in use: a spec and whether it follows the system's light/dark setting. */
+data class ActiveTheme(val id: String, val spec: ThemeSpec, val mode: ThemeMode) {
+    companion object {
+        /** The default: the spec's Light and Dark, following the system. */
+        val Default get() = BuiltinThemes.automatic
     }
-
-    data class Fixed(override val id: String, val spec: ThemeSpec, val mode: ThemeMode) : ActiveTheme
 }
 
-/** Built-in themes (F9.3): Material You (default), Light and Dark (Commit's palette, forced). */
+/** Built-in themes (F9.3): Automatic (default), Light and Dark. */
 object BuiltinThemes {
-    const val DYNAMIC = "builtin:dynamic"
+    const val AUTOMATIC = "builtin:system"
+    /** Material You before the design spec; stored ids from then mean Automatic now. */
+    const val LEGACY_DYNAMIC = "builtin:dynamic"
     const val LIGHT = "builtin:light"
     const val DARK = "builtin:dark"
 
-    val light = ActiveTheme.Fixed(LIGHT, ThemeDefaults.spec("Light"), ThemeMode.LIGHT)
-    val dark = ActiveTheme.Fixed(DARK, ThemeDefaults.spec("Dark"), ThemeMode.DARK)
-    val all: List<ActiveTheme> = listOf(ActiveTheme.Dynamic, light, dark)
+    val automatic = ActiveTheme(AUTOMATIC, ThemeDefaults.spec("Automatic"), ThemeMode.SYSTEM)
+    val light = ActiveTheme(LIGHT, ThemeDefaults.spec("Light"), ThemeMode.LIGHT)
+    val dark = ActiveTheme(DARK, ThemeDefaults.spec("Dark"), ThemeMode.DARK)
+    val all: List<ActiveTheme> = listOf(automatic, light, dark)
 
     /**
      * Resolves `settings.active_theme_id`: a built-in id, an imported theme's id (looked up with
-     * [imported]), or null. Anything unknown or no longer valid falls back to Material You.
+     * [imported]), or null. Anything unknown or no longer valid falls back to Automatic.
      */
     fun resolve(id: String?, imported: (String) -> ThemeSpec?): ActiveTheme = when (id) {
-        null, DYNAMIC -> ActiveTheme.Dynamic
+        null, AUTOMATIC, LEGACY_DYNAMIC -> automatic
         LIGHT -> light
         DARK -> dark
-        else -> imported(id)?.let { ActiveTheme.Fixed(id, it, ThemeMode.SYSTEM) } ?: ActiveTheme.Dynamic
+        else -> imported(id)?.let { ActiveTheme(id, it, ThemeMode.SYSTEM) } ?: automatic
     }
 }

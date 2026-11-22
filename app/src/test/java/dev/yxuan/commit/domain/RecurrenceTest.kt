@@ -142,8 +142,8 @@ class RecurrenceTest {
         val intervalChore = TodoEntity(id = "1", updatedAt = 0, commitmentId = "c", title = "A", recurIntervalDays = 3)
         val singleDayChore = TodoEntity(id = "2", updatedAt = 0, commitmentId = "c", title = "B", recurIntervalDays = 1)
         val calendarChore = TodoEntity(id = "3", updatedAt = 0, commitmentId = "c", title = "C", recurDays = 21) // Mon, Wed, Fri
-        assertEquals("every 3 days", Recurrence.label(intervalChore))
-        assertEquals("every day", Recurrence.label(singleDayChore))
-        assertEquals("Mon · Wed · Fri", Recurrence.label(calendarChore))
+        assertEquals("Every 3 days", Recurrence.label(intervalChore))
+        assertEquals("Every day", Recurrence.label(singleDayChore))
+        assertEquals("Mon, Wed, Fri", Recurrence.label(calendarChore))
     }
 }

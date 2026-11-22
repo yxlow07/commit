@@ -1,35 +1,28 @@
 package dev.yxuan.commit.ui.todos
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -38,131 +31,183 @@ import dev.yxuan.commit.data.db.entity.CommitmentType
 import dev.yxuan.commit.domain.Recurrence
 import dev.yxuan.commit.domain.TodoItem
 import dev.yxuan.commit.ui.AppViewModelFactory
-import dev.yxuan.commit.ui.format.DueFormatter
-import dev.yxuan.commit.ui.format.DueStatus
-import dev.yxuan.commit.ui.workout.RoutinesScreen
+import dev.yxuan.commit.ui.commitments.CommitmentDialog
+import dev.yxuan.commit.ui.common.openQuickAdd
+import dev.yxuan.commit.ui.components.PrimaryButton
+import dev.yxuan.commit.ui.components.PushedTopBar
+import dev.yxuan.commit.ui.components.ScreenTitle
+import dev.yxuan.commit.ui.components.SectionHeading
+import dev.yxuan.commit.ui.components.TextAction
+import dev.yxuan.commit.ui.components.TextTabs
+import dev.yxuan.commit.ui.components.TodoRow
+import dev.yxuan.commit.ui.format.DueLabels
+import dev.yxuan.commit.ui.theme.Commit
+import dev.yxuan.commit.ui.theme.Space
+import java.time.Clock
+import java.time.DayOfWeek
+import java.time.Instant
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
+import java.time.temporal.TemporalAdjusters
+import java.util.Locale
 
-/** Todos of one commitment: open ones in widget order, done ones collapsed below (F2.2). */
-@OptIn(ExperimentalMaterial3Api::class)
+/** A section of rows: heading, whether it's the Overdue one, and rows with their second line. */
+private data class Section(val title: String, val danger: Boolean, val rows: List<Row>)
+private data class Row(val item: TodoItem, val second: String?, val checked: Boolean, val doneAt: Long? = null)
+
+/** Commitment detail (pushed): title, "4 open, 1 overdue", Open / Done, sections, "Add to Study". */
 @Composable
 fun CommitmentDetailScreen(
     onBack: () -> Unit,
     onEditTodo: (String) -> Unit,
-    onAddTodo: (String) -> Unit,
-    onOpenRoutine: (String) -> Unit,
-    onOpenLive: () -> Unit,
+    onOpenWorkouts: () -> Unit,
     viewModel: CommitmentDetailViewModel = viewModel(factory = AppViewModelFactory),
 ) {
     val commitment by viewModel.commitment.collectAsStateWithLifecycle()
-    val open by viewModel.open.collectAsStateWithLifecycle()
-    val done by viewModel.done.collectAsStateWithLifecycle()
-    var showDone by rememberSaveable { mutableStateOf(false) }
-    val isWorkout = commitment?.type == CommitmentType.WORKOUT
+    val openList by viewModel.open.collectAsStateWithLifecycle()
+    val doneList by viewModel.done.collectAsStateWithLifecycle()
+    var tab by rememberSaveable { mutableIntStateOf(0) }
+    var editing by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val c = Commit.colors
+    val clock: Clock = DeviceClock
 
-    // Workout commitments hold routines instead of todos (F1.2, F5.1).
-    if (isWorkout) {
-        RoutinesScreen(commitment?.name ?: "", onBack, onOpenRoutine, onOpenLive)
-        return
+    // Workout commitments hold routines, which live on the Workouts screen (F1.2, F5.1).
+    LaunchedEffect(commitment?.type) {
+        if (commitment?.type == CommitmentType.WORKOUT) onOpenWorkouts()
+    }
+    LaunchedEffect(commitment?.archived) {
+        if (commitment?.archived == true) onBack()
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(commitment?.name ?: "") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-            )
-        },
-        floatingActionButton = {
-            if (!isWorkout) {
-                FloatingActionButton(onClick = { onAddTodo(viewModel.commitmentId) }) {
-                    Icon(Icons.Default.Add, contentDescription = "Add todo")
+    val items = openList.orEmpty().map { TodoItem.of(it, clock) }
+    val open = items.filterNot { it.isDone }
+    val lateCount = open.count { DueLabels.isLate(it.dueAt, it.hasTime, clock) }
+    val subtitle = when {
+        openList == null -> ""
+        open.isEmpty() -> "Nothing open"
+        lateCount > 0 -> "${open.size} open, $lateCount overdue"
+        else -> "${open.size} open"
+    }
+    val sections = if (tab == 0) openSections(open, clock) else doneSections(items.filter { it.isDone }, doneList.map { TodoItem.of(it, clock) }, clock)
+    val name = commitment?.name ?: ""
+
+    Box(Modifier.fillMaxSize().statusBarsPadding()) {
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 120.dp)) {
+            item {
+                PushedTopBar(onBack = onBack, backLabel = "Back to Today") {
+                    TextAction("Edit", onClick = { editing = true })
                 }
+                Column(Modifier.padding(horizontal = Space.screenSide).padding(top = Space.l), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                    ScreenTitle(name)
+                    Text(subtitle, style = Commit.type.meta, color = c.muted)
+                }
+                TextTabs(listOf("Open", "Done"), tab, { tab = it }, modifier = Modifier.padding(horizontal = Space.screenSide).padding(top = Space.l))
+                Spacer(Modifier.height(Space.s))
             }
-        },
-    ) { padding ->
-        if (isWorkout) {
-            Placeholder("Workout mode arrives in a later update.", Modifier.padding(padding))
-            return@Scaffold
-        }
-        if (open.isEmpty() && done.isEmpty()) {
-            Placeholder("No todos yet. Tap + to add one.", Modifier.padding(padding))
-            return@Scaffold
-        }
-        // Recurring "done" is calculated from the clock (F4.4); done chores sit with completed todos.
-        val items = open.map { TodoItem.of(it, DeviceClock) }
-        val openItems = items.filterNot { it.isDone }.sortedWith(TodoItem.ORDER)
-        val doneItems = items.filter { it.isDone } + done.map { TodoItem.of(it, DeviceClock) }
-        LazyColumn(Modifier.fillMaxSize().padding(padding)) {
-            items(openItems, key = { it.todo.id }) { item ->
-                TodoRow(item, onToggle = { viewModel.setDone(item.todo.id, it) }, onClick = { onEditTodo(item.todo.id) })
-            }
-            if (doneItems.isNotEmpty()) {
-                item(key = "done-header") {
-                    ListItem(
-                        modifier = Modifier.clickable { showDone = !showDone },
-                        headlineContent = { Text("Done (${doneItems.size})", style = MaterialTheme.typography.titleSmall) },
-                        trailingContent = {
-                            Icon(
-                                if (showDone) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                contentDescription = if (showDone) "Hide done" else "Show done",
-                            )
-                        },
+            if (openList != null && sections.isEmpty()) {
+                item {
+                    Text(
+                        if (tab == 0) "Nothing left in $name." else "Nothing finished yet.",
+                        style = Commit.type.body,
+                        color = c.textStrong,
+                        modifier = Modifier.padding(horizontal = Space.screenSide).padding(start = Space.dueColumn, top = Space.s),
                     )
                 }
-                if (showDone) {
-                    items(doneItems, key = { it.todo.id }) { item ->
-                        TodoRow(item, onToggle = { viewModel.setDone(item.todo.id, it) }, onClick = { onEditTodo(item.todo.id) })
-                    }
+            }
+            sections.forEach { section ->
+                item(key = "h-${section.title}") {
+                    SectionHeading(section.title, danger = section.danger, modifier = Modifier.padding(horizontal = Space.screenSide).padding(top = Space.l))
+                }
+                items(section.rows, key = { "${section.title}-${it.item.todo.id}" }) { row ->
+                    TodoRow(
+                        due = if (row.doneAt != null) DueLabels.done(row.doneAt, clock) else DueLabels.open(row.item.dueAt, row.item.hasTime, clock),
+                        title = row.item.todo.title,
+                        checked = row.checked,
+                        onCheckedChange = { viewModel.setDone(row.item.todo.id, it) },
+                        onClick = { onEditTodo(row.item.todo.id) },
+                        secondLine = row.second,
+                        modifier = Modifier.padding(horizontal = Space.screenSide).animateItem(),
+                    )
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun TodoRow(item: TodoItem, onToggle: (Boolean) -> Unit, onClick: () -> Unit) {
-    val todo = item.todo
-    val due = DueFormatter.format(item.dueAt, item.hasTime, DeviceClock)
-    // Done chores show when they come back; open ones show their due label. Both note the interval.
-    val supporting = buildList {
-        if (item.isDone && item.isRecurring) {
-            val next = DueFormatter.format(item.dueAt, false, DeviceClock).text
-            add("Next: $next")
-        } else if (!item.isDone && due.status != DueStatus.NONE) {
-            add(due.text)
-        }
-        if (item.isRecurring) add(Recurrence.label(todo))
-    }.joinToString(" · ")
-    ListItem(
-        modifier = Modifier.clickable(onClick = onClick),
-        leadingContent = { Checkbox(checked = item.isDone, onCheckedChange = onToggle) },
-        headlineContent = {
-            Text(
-                todo.title,
-                fontWeight = if (!item.isDone && due.status == DueStatus.TODAY) FontWeight.Bold else null,
-                textDecoration = if (item.isDone) TextDecoration.LineThrough else null,
-                color = if (item.isDone) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+        if (commitment != null) {
+            PrimaryButton(
+                "Add to $name",
+                onClick = { openQuickAdd(context, viewModel.commitmentId) },
+                modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = Space.screenSide, bottom = Space.xxl),
             )
-        },
-        supportingContent = if (supporting.isNotEmpty()) {
-            {
-                Text(
-                    supporting,
-                    color = if (!item.isDone && due.status == DueStatus.OVERDUE) MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        } else null,
-    )
+        }
+    }
+
+    if (editing && commitment != null) {
+        CommitmentDialog(
+            initial = commitment,
+            onDismiss = { editing = false },
+            onSave = { n, _, color, show -> viewModel.update(n, color, show); editing = false },
+            onMove = { viewModel.move(it) },
+            onArchive = { viewModel.archive(); editing = false },
+        )
+    }
 }
 
-@Composable
-private fun Placeholder(text: String, modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-        Text(text, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+/** Overdue, This week (today and the next 6 days), Later, No date. Empty sections are hidden. */
+private fun openSections(open: List<TodoItem>, clock: Clock): List<Section> {
+    val today = LocalDate.now(clock)
+    fun day(m: Long) = Instant.ofEpochMilli(m).atZone(clock.zone).toLocalDate()
+    val sorted = open.sortedWith(TodoItem.ORDER)
+    val late = sorted.filter { DueLabels.isLate(it.dueAt, it.hasTime, clock) }
+    val rest = sorted - late.toSet()
+    val week = rest.filter { it.dueAt != null && ChronoUnit.DAYS.between(today, day(it.dueAt)) <= 6 }
+    val later = rest.filter { it.dueAt != null } - week.toSet()
+    val undated = rest.filter { it.dueAt == null }
+    fun second(i: TodoItem): String? {
+        val parts = mutableListOf<String>()
+        if (i.isRecurring) parts += Recurrence.label(i.todo)
+        val d = i.dueAt
+        when {
+            d == null -> Unit
+            DueLabels.isLate(d, i.hasTime, clock) -> parts += "was due " + DueLabels.full(d, i.hasTime, clock)
+            day(d) != today -> parts += DueLabels.full(d, i.hasTime, clock)
+            i.hasTime -> parts += "Today" // the left column shows the time
+        }
+        return parts.joinToString(", ").replaceFirstChar { it.uppercase() }.ifEmpty { null }
     }
+    return listOf(
+        Section("Overdue", true, late.map { Row(it, second(it), false) }),
+        Section("This week", false, week.map { Row(it, second(it), false) }),
+        Section("Later", false, later.map { Row(it, second(it), false) }),
+        Section("No date", false, undated.map { Row(it, second(it), false) }),
+    ).filter { it.rows.isNotEmpty() }
+}
+
+/**
+ * Done: grouped by week, newest first. One-off todos say "On time", "1 day late" or "No due date";
+ * chores waiting for their next due day say when that is.
+ */
+private fun doneSections(doneChores: List<TodoItem>, doneTodos: List<TodoItem>, clock: Clock): List<Section> {
+    val today = LocalDate.now(clock)
+    val monday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+    val rows = doneChores.mapNotNull { i ->
+        val at = i.todo.lastDoneAt ?: return@mapNotNull null
+        val next = i.dueAt?.let { due -> DueLabels.open(due, false, clock).text.let { if (it == "Today") "today" else it } }
+        Row(i, listOfNotNull(Recurrence.label(i.todo), next?.let { "next $it" }).joinToString(", "), true, at)
+    } + doneTodos.mapNotNull { i ->
+        val at = i.todo.doneAt ?: return@mapNotNull null
+        Row(i, DueLabels.timeliness(i.todo.dueAt, i.todo.hasTime, at, clock), true, at)
+    }
+    fun weekTitle(at: Long): String {
+        val d = Instant.ofEpochMilli(at).atZone(clock.zone).toLocalDate()
+        val weekStart = d.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        return when (weekStart) {
+            monday -> "This week"
+            monday.minusWeeks(1) -> "Last week"
+            else -> "Week of " + weekStart.format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()))
+        }
+    }
+    return rows.sortedByDescending { it.doneAt }
+        .groupBy { weekTitle(it.doneAt!!) }
+        .map { (title, list) -> Section(title, false, list) }
 }

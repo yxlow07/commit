@@ -516,3 +516,23 @@ Following the completion of M9 (Themes), M10 addresses the remaining core and re
 - Web Typecheck & Lint: clean (`npm run typecheck`, `npm run lint`).
 - Web Build: static export succeeded.
 - Web Deploy: Cloudflare Pages deployment completed.
+
+
+---
+
+# Plan: Design pass (App Design Spec)
+
+## Context
+`app/App Design Spec.md` (with a clickable canvas) is the visual source of truth for the app and widget: greyscale with one red accent for "late", one type family (Hanken Grotesk), hierarchy by type, no dividers or cards, the same todo row everywhere (due left, checkbox right), a bottom nav (Today, History, Workouts, Settings), and a redesigned widget with text tabs.
+
+Decisions made with the user:
+- **Theme files switch to the spec's token names** (format v2: `ink`, `onInk`, `textStrong`, `muted`, `faint`, `track`, `fill`, `surface`, `background`, `danger`, `scrim`), with version 1 files still read and mapped. Built-ins become Automatic (default), Light and Dark; Material You is dropped (old ids map to Automatic). Phone and web parsers, schema, README and examples change together.
+- **Hanken Grotesk is bundled** (variable TTF from google/fonts, OFL) for the app; the widget uses the system font (Glance limit), with `sans-serif-light` for the large light numbers.
+
+## Work
+1. Tokens and type: `ui/theme/Tokens.kt` (colours, type scale with tabular figures, radii, spacing), `CommitTheme` maps tokens onto a Material scheme so stock pickers fit.
+2. Shared components (`ui/components/`): circle checkbox, todo row, primary / secondary / text / round buttons, stepper, set progress, segmented control, text field, section heading, text tabs, bottom nav, dialog panel, pickers.
+3. One due-label formatter (`ui/format/DueLabels.kt`): Late / 18:00 / Today / weekday / 28 Nov / empty, weekday finished in Done and history; replaces `DueFormatter`.
+4. Screens: Today (new start screen), Commitment detail (Overdue / This week / Later / No date; Done by week), Todo editor, quick-add popup, History (12-week heatmap, timeline with exception notes; best set, line chart, sessions), Workouts tab (routines, live workout), routine editor, live workout, session detail, Settings, Themes (preview, radio list, import), recap screen.
+5. Widget: text tabs (up to 5, then "More" picker), due-left rows with drawable checkboxes, ticked rows stay checked in place until the tab changes, footer count + round add, empty states, small / medium / large by size, workout panel (full and compact), token colours with day/night providers.
+6. Copy: commas not middle dots, sentence case, notification titles and bodies from the spec.

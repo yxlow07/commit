@@ -2,31 +2,27 @@ package dev.yxuan.commit.ui.history
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -34,40 +30,56 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.yxuan.commit.data.db.dao.SetRow
 import dev.yxuan.commit.ui.AppViewModelFactory
+import dev.yxuan.commit.ui.components.CommitDialog
+import dev.yxuan.commit.ui.components.CommitTextField
+import dev.yxuan.commit.ui.components.PrimaryButton
+import dev.yxuan.commit.ui.components.PushedTopBar
+import dev.yxuan.commit.ui.components.ScreenTitle
+import dev.yxuan.commit.ui.components.SectionHeading
+import dev.yxuan.commit.ui.components.TextAction
 import dev.yxuan.commit.ui.format.WorkoutFormat
-import dev.yxuan.commit.ui.settings.SectionTitle
+import dev.yxuan.commit.ui.theme.Commit
+import dev.yxuan.commit.ui.theme.Space
+import dev.yxuan.commit.ui.theme.tnum
 
-/** Every set of a session as done; tap a set to fix reps/weight or delete it (F8.5). */
-@OptIn(ExperimentalMaterial3Api::class)
+/** Every set of a session as done; tap a set to fix reps or weight, or delete it (F8.5). */
 @Composable
 fun SessionDetailScreen(onBack: () -> Unit, viewModel: SessionDetailViewModel = viewModel(factory = AppViewModelFactory)) {
     val session by viewModel.session.collectAsStateWithLifecycle()
     val sets by viewModel.sets.collectAsStateWithLifecycle()
     var editing by remember { mutableStateOf<SetRow?>(null) }
+    val c = Commit.colors
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(session?.routineName ?: "Workout") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
-                },
-            )
-        },
-    ) { padding ->
-        LazyColumn(Modifier.fillMaxSize().padding(padding)) {
-            session?.let { s -> item { Text(sessionLine(s), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(16.dp)) } }
+    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        PushedTopBar(onBack = onBack, backLabel = "Back to History")
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = Space.screenSide, end = Space.screenSide, top = Space.l, bottom = Space.xxxl)) {
+            session?.let { s ->
+                item {
+                    ScreenTitle(s.routineName)
+                    Text(
+                        "${WorkoutFormat.sessionDate(s)}, ${WorkoutFormat.sessionMeta(s)}, ${WorkoutFormat.volume(s.volume)}",
+                        style = Commit.type.meta.tnum(),
+                        color = c.muted,
+                        modifier = Modifier.padding(top = Space.xs),
+                    )
+                    Spacer(Modifier.height(Space.s))
+                }
+            }
             sets.groupBy { it.exerciseName }.forEach { (name, rows) ->
-                item(key = "h$name") { SectionTitle(name) }
+                item(key = "h$name") { SectionHeading(name, Modifier.padding(top = Space.l)) }
                 items(rows, key = { it.set.id }) { row ->
                     val timed = row.set.reps == 0 && row.set.weight == 0.0
-                    ListItem(
-                        modifier = Modifier.clickable(enabled = !timed) { editing = row },
-                        headlineContent = { Text("Set ${row.set.setNo}") },
-                        trailingContent = {
-                            Text(if (timed) "timed" else "${row.set.reps} × ${WorkoutFormat.weight(row.set.weight)}", style = MaterialTheme.typography.bodyLarge)
-                        },
-                    )
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = Space.rowWidget).clickable(enabled = !timed) { editing = row },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Set ${row.set.setNo}", style = Commit.type.body, color = c.ink, modifier = Modifier.weight(1f))
+                        Text(
+                            if (timed) "Timed" else "${row.set.reps} × ${WorkoutFormat.weight(row.set.weight)}",
+                            style = Commit.type.body.tnum(),
+                            color = c.textStrong,
+                        )
+                    }
                 }
             }
         }
@@ -75,38 +87,26 @@ fun SessionDetailScreen(onBack: () -> Unit, viewModel: SessionDetailViewModel = 
 
     editing?.let { row ->
         var reps by rememberSaveable(row.set.id) { mutableStateOf(row.set.reps.toString()) }
-        var weight by rememberSaveable(row.set.id) { mutableStateOf(WorkoutFormat.weight(row.set.weight).removeSuffix(" kg")) }
-        AlertDialog(
-            onDismissRequest = { editing = null },
-            title = { Text("${row.exerciseName} · set ${row.set.setNo}") },
-            text = {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = reps, onValueChange = { v -> reps = v.filter(Char::isDigit).take(4) },
-                        label = { Text("Reps") }, singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f),
-                    )
-                    OutlinedTextField(
-                        value = weight, onValueChange = { v -> weight = v.filter { it.isDigit() || it == '.' || it == ',' }.take(6) },
-                        label = { Text("Weight (kg)") }, singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f),
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
+        var weight by rememberSaveable(row.set.id) { mutableStateOf(WorkoutFormat.weightValue(row.set.weight)) }
+        CommitDialog(
+            title = "${row.exerciseName}, set ${row.set.setNo}",
+            onDismiss = { editing = null },
+            actions = {
+                TextAction("Delete set", onClick = { viewModel.delete(row.set.id); editing = null }, muted = true)
+                Spacer(Modifier.weight(1f))
+                TextAction("Cancel", onClick = { editing = null })
+                PrimaryButton("Save", onClick = {
                     viewModel.edit(row.set.id, reps.toIntOrNull() ?: row.set.reps, weight.replace(',', '.').toDoubleOrNull() ?: row.set.weight)
                     editing = null
-                }) { Text("Save") }
+                })
             },
-            dismissButton = {
-                Row {
-                    TextButton(onClick = { viewModel.delete(row.set.id); editing = null }) {
-                        Text("Delete", color = MaterialTheme.colorScheme.error)
-                    }
-                    TextButton(onClick = { editing = null }) { Text("Cancel") }
-                }
-            },
-        )
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CommitTextField(reps, { v -> reps = v.filter(Char::isDigit).take(4) }, label = "Reps",
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
+                CommitTextField(weight, { v -> weight = v.filter { it.isDigit() || it == '.' || it == ',' }.take(6) }, label = "Weight, kg",
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
+            }
+        }
     }
 }

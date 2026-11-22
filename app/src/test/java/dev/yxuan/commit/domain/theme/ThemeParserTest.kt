@@ -1,7 +1,6 @@
 package dev.yxuan.commit.domain.theme
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -9,155 +8,133 @@ import java.io.File
 
 class ThemeParserTest {
 
+    private fun example(name: String): String =
+        (File("../themes/examples/$name").takeIf { it.exists() } ?: File("themes/examples/$name")).readText()
+
+    private fun ok(json: String): ThemeSpec {
+        val result = ThemeParser.parse(json)
+        assertTrue("expected Ok, got $result", result is ThemeParseResult.Ok)
+        return (result as ThemeParseResult.Ok).spec
+    }
+
+    private fun errors(json: String): List<String> {
+        val result = ThemeParser.parse(json)
+        assertTrue("expected Invalid, got $result", result is ThemeParseResult.Invalid)
+        return (result as ThemeParseResult.Invalid).errors
+    }
+
     @Test
     fun parseOceanExample() {
-        val file = File("../themes/examples/ocean.json").takeIf { it.exists() }
-            ?: File("themes/examples/ocean.json")
-        val json = file.readText()
-        val result = ThemeParser.parse(json)
-        assertTrue(result is ThemeParseResult.Ok)
-        val spec = (result as ThemeParseResult.Ok).spec
+        val spec = ok(example("ocean.json"))
         assertEquals("Ocean", spec.name)
-        assertEquals(ThemeParser.parseColor("#1E5AA8"), spec.light.primary)
-        assertEquals(ThemeParser.parseColor("#A4C8FF"), spec.dark.primary)
-        assertEquals(20f, spec.cornerRadius)
+        assertEquals(ThemeParser.parseColor("#14283D"), spec.light.ink)
+        assertEquals(ThemeParser.parseColor("#E3ECF5"), spec.dark.ink)
+        assertEquals(ThemeDefaults.light.scrim, spec.light.scrim) // not set: from Light
+        assertEquals(32f, spec.cornerRadius)
         assertEquals(ThemeFont.ROUNDED, spec.font)
     }
 
     @Test
     fun parseForestExampleWithDefaultsFilled() {
-        val file = File("../themes/examples/forest.json").takeIf { it.exists() }
-            ?: File("themes/examples/forest.json")
-        val json = file.readText()
-        val result = ThemeParser.parse(json)
-        assertTrue(result is ThemeParseResult.Ok)
-        val spec = (result as ThemeParseResult.Ok).spec
-        assertEquals("Forest", spec.name)
-        assertEquals(ThemeParser.parseColor("#2E6B30"), spec.light.primary)
-        // dark set was missing entirely, filled from ThemeDefaults.dark
-        assertEquals(ThemeDefaults.dark.primary, spec.dark.primary)
-        assertEquals(ThemeDefaults.dark.background, spec.dark.background)
-        // missing light.error filled from ThemeDefaults.light
-        assertEquals(ThemeDefaults.light.error, spec.light.error)
-        assertEquals(8f, spec.cornerRadius)
+        val spec = ok(example("forest.json"))
+        assertEquals(ThemeParser.parseColor("#1F2A1E"), spec.light.ink)
+        assertEquals(ThemeDefaults.light.danger, spec.light.danger) // missing key: from Light
+        assertEquals(ThemeDefaults.dark, spec.dark) // no dark set: Dark
+        assertEquals(12f, spec.cornerRadius)
         assertEquals(ThemeFont.SERIF, spec.font)
     }
 
     @Test
     fun parseHighContrastExample() {
-        val file = File("../themes/examples/high-contrast.json").takeIf { it.exists() }
-            ?: File("themes/examples/high-contrast.json")
-        val json = file.readText()
-        val result = ThemeParser.parse(json)
-        assertTrue(result is ThemeParseResult.Ok)
-        val spec = (result as ThemeParseResult.Ok).spec
+        val spec = ok(example("high-contrast.json"))
         assertEquals("High contrast", spec.name)
-        assertEquals(4f, spec.cornerRadius)
+        assertEquals(ThemeParser.parseColor("#000000"), spec.light.ink)
+        assertEquals(8f, spec.cornerRadius)
         assertEquals(ThemeFont.DEFAULT, spec.font)
     }
 
     @Test
-    fun rejectUnsupportedSchemaVersion() {
-        val json = """{"schemaVersion": 2, "name": "Test"}"""
-        val result = ThemeParser.parse(json)
-        assertTrue(result is ThemeParseResult.Invalid)
-        val errors = (result as ThemeParseResult.Invalid).errors
-        assertTrue(errors.any { it.contains("schemaVersion 2 isn't supported") })
+    fun version1FileIsMappedToTokens() {
+        val spec = ok(example("v1/ocean.json"))
+        assertEquals("Ocean", spec.name)
+        assertEquals(ThemeParser.parseColor("#141C24"), spec.light.ink) // onSurface
+        assertEquals(ThemeParser.parseColor("#4A5866"), spec.light.muted) // onSurfaceVariant
+        assertEquals(ThemeParser.parseColor("#E6EEF6"), spec.light.fill) // surfaceVariant
+        assertEquals(ThemeParser.parseColor("#BA1A1A"), spec.light.danger) // error
+        assertEquals(ThemeParser.parseColor("#FFFFFF"), spec.light.onInk) // surface
+        assertEquals(ThemeParser.parseColor("#DDE5EE"), spec.dark.ink)
+        assertEquals(20f, spec.cornerRadius)
     }
 
     @Test
-    fun rejectMissingSchemaVersion() {
-        val json = """{"name": "Test"}"""
-        val result = ThemeParser.parse(json)
-        assertTrue(result is ThemeParseResult.Invalid)
-        val errors = (result as ThemeParseResult.Invalid).errors
-        assertTrue(errors.any { it.contains("schemaVersion is missing") })
+    fun rejectUnsupportedOrMissingSchemaVersion() {
+        assertTrue(errors("""{"schemaVersion": 3, "name": "X", "light": {}}""").single().contains("isn't supported"))
+        assertTrue(errors("""{"name": "X", "light": {}}""").single().contains("schemaVersion is missing"))
     }
 
     @Test
-    fun rejectInvalidName() {
-        val emptyName = """{"schemaVersion": 1, "name": "   "}"""
-        val r1 = ThemeParser.parse(emptyName) as ThemeParseResult.Invalid
-        assertTrue(r1.errors.any { it.contains("name can't be empty") })
-
-        val longName = """{"schemaVersion": 1, "name": "${"a".repeat(41)}"}"""
-        val r2 = ThemeParser.parse(longName) as ThemeParseResult.Invalid
-        assertTrue(r2.errors.any { it.contains("name is longer than 40 characters") })
-
-        val missingName = """{"schemaVersion": 1}"""
-        val r3 = ThemeParser.parse(missingName) as ThemeParseResult.Invalid
-        assertTrue(r3.errors.any { it.contains("name is missing") })
+    fun nameRules() {
+        assertTrue(errors("""{"schemaVersion": 2, "light": {}}""").contains("name is missing."))
+        assertTrue(errors("""{"schemaVersion": 2, "name": "  ", "light": {}}""").contains("name can't be empty."))
+        assertTrue(errors("""{"schemaVersion": 2, "name": 5, "light": {}}""").contains("name must be text."))
+        assertTrue(errors("""{"schemaVersion": 2, "name": "${"x".repeat(41)}", "light": {}}""").single().contains("longer than 40"))
     }
 
     @Test
-    fun rejectInvalidColors() {
-        val json = """{
-            "schemaVersion": 1,
-            "name": "Bad Color",
-            "light": {"primary": "#12345"}
-        }"""
-        val result = ThemeParser.parse(json) as ThemeParseResult.Invalid
-        assertTrue(result.errors.any { it.contains("light.primary: \"#12345\" is not a colour like #1E5AA8.") })
+    fun noColoursSection() {
+        assertEquals(listOf("This file has no colours section (light or dark)."), errors("""{"schemaVersion": 2, "name": "X"}"""))
     }
 
     @Test
-    fun rejectInvalidCornerRadius() {
-        val negative = """{"schemaVersion": 1, "name": "Negative", "shape": {"cornerRadius": -1}}"""
-        val r1 = ThemeParser.parse(negative) as ThemeParseResult.Invalid
-        assertTrue(r1.errors.any { it.contains("shape.cornerRadius must be a number from 0 to 32") })
-
-        val tooLarge = """{"schemaVersion": 1, "name": "Too Big", "shape": {"cornerRadius": 33}}"""
-        val r2 = ThemeParser.parse(tooLarge) as ThemeParseResult.Invalid
-        assertTrue(r2.errors.any { it.contains("shape.cornerRadius must be a number from 0 to 32") })
+    fun invalidColoursNameTheField() {
+        val e = errors("""{"schemaVersion": 2, "name": "X", "light": {"ink": "#12345", "muted": 7}, "dark": "blue"}""")
+        assertTrue(e.any { it.startsWith("light.ink:") && it.contains("is not a colour like #1F2123") })
+        assertTrue(e.any { it.startsWith("light.muted:") })
+        assertTrue(e.any { it.startsWith("dark must be an object") })
     }
 
     @Test
-    fun rejectInvalidFont() {
-        val json = """{"schemaVersion": 1, "name": "Bad Font", "font": "comic-sans"}"""
-        val result = ThemeParser.parse(json) as ThemeParseResult.Invalid
-        assertTrue(result.errors.any { it.contains("font must be one of default, serif, mono or rounded") })
+    fun radiusRules() {
+        assertTrue(errors("""{"schemaVersion": 2, "name": "X", "light": {}, "shape": {"cornerRadius": 41}}""").single().contains("0 to 40"))
+        assertTrue(errors("""{"schemaVersion": 2, "name": "X", "light": {}, "shape": {"cornerRadius": "8"}}""").single().contains("0 to 40"))
+        assertEquals(0f, ok("""{"schemaVersion": 2, "name": "X", "light": {}, "shape": {"cornerRadius": 0}}""").cornerRadius)
     }
 
     @Test
-    fun rejectOversizedFile() {
-        val json = """{"schemaVersion": 1, "name": "Big", "extra": "${"x".repeat(33 * 1024)}"}"""
-        val result = ThemeParser.parse(json) as ThemeParseResult.Invalid
-        assertTrue(result.errors.any { it.contains("larger than 32 KB") })
+    fun fontRules() {
+        assertTrue(errors("""{"schemaVersion": 2, "name": "X", "light": {}, "font": "comic"}""").single().contains("font must be one of"))
     }
 
     @Test
-    fun rejectMalformedJson() {
-        val r1 = ThemeParser.parse("not json") as ThemeParseResult.Invalid
-        assertTrue(r1.errors.any { it.contains("isn't valid JSON") })
-
-        val r2 = ThemeParser.parse("[1, 2, 3]") as ThemeParseResult.Invalid
-        assertTrue(r2.errors.any { it.contains("must be a JSON object") })
+    fun oversizedFileIsRefused() {
+        val big = """{"schemaVersion": 2, "name": "X", "light": {}, "pad": "${"x".repeat(33 * 1024)}"}"""
+        assertTrue(errors(big).single().contains("larger than 32 KB"))
     }
 
     @Test
-    fun parseColorFormats() {
+    fun malformedJson() {
+        assertEquals(listOf("This isn't valid JSON."), errors("{not json"))
+        assertTrue(errors("[1, 2]").single().contains("must be a JSON object"))
+    }
+
+    @Test
+    fun parseColorHandlesAlpha() {
         assertEquals(0xFF1E5AA8.toInt(), ThemeParser.parseColor("#1E5AA8"))
-        assertEquals(0x801E5AA8.toInt(), ThemeParser.parseColor("#801E5AA8"))
-        assertNull(ThemeParser.parseColor("#12345"))
+        assertEquals(0x731F2123, ThemeParser.parseColor("#731F2123"))
         assertNull(ThemeParser.parseColor("1E5AA8"))
-        assertNull(ThemeParser.parseColor("#ZZZZZZ"))
+        assertNull(ThemeParser.parseColor("#GGGGGG"))
     }
 
     @Test
-    fun builtinThemesResolve() {
-        assertEquals(ActiveTheme.Dynamic, BuiltinThemes.resolve(null) { null })
-        assertEquals(ActiveTheme.Dynamic, BuiltinThemes.resolve(BuiltinThemes.DYNAMIC) { null })
-        assertEquals(BuiltinThemes.light, BuiltinThemes.resolve(BuiltinThemes.LIGHT) { null })
-        assertEquals(BuiltinThemes.dark, BuiltinThemes.resolve(BuiltinThemes.DARK) { null })
-
-        val customSpec = ThemeDefaults.spec("Custom")
-        val resolvedCustom = BuiltinThemes.resolve("custom-1") { id -> if (id == "custom-1") customSpec else null }
-        assertTrue(resolvedCustom is ActiveTheme.Fixed)
-        assertEquals("custom-1", resolvedCustom.id)
-        assertEquals(ThemeMode.SYSTEM, (resolvedCustom as ActiveTheme.Fixed).mode)
-
-        // Missing custom theme falls back to Dynamic
-        val missingCustom = BuiltinThemes.resolve("missing") { null }
-        assertEquals(ActiveTheme.Dynamic, missingCustom)
+    fun builtinResolution() {
+        assertEquals(BuiltinThemes.automatic, BuiltinThemes.resolve(null) { null })
+        assertEquals(BuiltinThemes.automatic, BuiltinThemes.resolve(BuiltinThemes.LEGACY_DYNAMIC) { null }) // old Material You id
+        assertEquals(ThemeMode.LIGHT, BuiltinThemes.resolve(BuiltinThemes.LIGHT) { null }.mode)
+        assertEquals(ThemeMode.DARK, BuiltinThemes.resolve(BuiltinThemes.DARK) { null }.mode)
+        assertEquals(BuiltinThemes.automatic, BuiltinThemes.resolve("deleted-theme") { null })
+        val imported = ThemeDefaults.spec("Mine")
+        val resolved = BuiltinThemes.resolve("t1") { if (it == "t1") imported else null }
+        assertEquals(imported, resolved.spec)
+        assertEquals(ThemeMode.SYSTEM, resolved.mode)
     }
 }

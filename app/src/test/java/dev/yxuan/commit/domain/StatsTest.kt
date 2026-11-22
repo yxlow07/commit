@@ -59,6 +59,20 @@ class StatsTest {
     }
 
     @Test
+    fun daysLateAndCurrentStreaks() {
+        val rows = listOf(
+            row("a", "Essay", millis(18, 23), due = millis(18)), // on time
+            row("b", "Quiz", millis(19, 15), due = millis(19, 14), hasTime = true), // same day, after the time
+            row("c", "Lab", millis(20, 9), due = millis(17)), // 3 days late
+        ) + listOf(17, 19, 21).mapIndexed { i, d -> row("p$i", "Plants", millis(d), "home", interval = 2) }
+        val late = Stats.daysLate(rows, zone)
+        assertEquals(null, late["a"])
+        assertEquals(0, late["b"])
+        assertEquals(3, late["c"])
+        assertEquals(mapOf("Plants" to 3), Stats.currentStreaks(rows, clock))
+    }
+
+    @Test
     fun thisWeekCountsFromMonday() {
         val rows = listOf(15, 16, 19, 21).mapIndexed { i, d -> row("r$i", "Read $i", millis(d)) }
         val stats = Stats.commitmentStats(rows, clock).single()

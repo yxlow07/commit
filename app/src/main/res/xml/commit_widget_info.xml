@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 4x2 minimum, resizable; the todo list grows with height (F3.6). -->
+<!-- Small 3x2, medium 4x3 (the default), large 4x4 and up; the list grows with height (F3.6). -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_description"
     android:initialLayout="@layout/glance_default_loading_layout"
-    android:minWidth="250dp"
+    android:minWidth="180dp"
     android:minHeight="110dp"
-    android:minResizeWidth="250dp"
+    android:minResizeWidth="180dp"
     android:minResizeHeight="110dp"
     android:targetCellWidth="4"
-    android:targetCellHeight="2"
+    android:targetCellHeight="3"
     android:resizeMode="horizontal|vertical"
     android:updatePeriodMillis="0"
     android:widgetCategory="home_screen"

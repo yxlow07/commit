@@ -48,6 +48,13 @@ class TodoRepository(
 
     fun observeOpenForWidget(): Flow<List<TodoEntity>> = dao.observeOpenForWidget()
 
+    fun observeForWidget(since: Long): Flow<List<TodoEntity>> = dao.observeForWidget(since)
+
+    /** Not-completed todos (and every recurring todo) of all active commitments. */
+    fun observeOpenAll(): Flow<List<TodoEntity>> = dao.observeOpenInActiveCommitments()
+
+    fun observeByIds(ids: List<String>): Flow<List<TodoEntity>> = dao.observeByIds(ids)
+
     suspend fun get(id: String): TodoEntity? = dao.getById(id)
 
     suspend fun add(

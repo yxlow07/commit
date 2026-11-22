@@ -15,8 +15,8 @@ object Weekdays {
 
     fun toggle(mask: Int, day: DayOfWeek): Int = mask xor bit(day)
 
-    /** "Mon · Thu", or "" when no day is set. */
+    /** "Mon, Thu" (spec: metadata joined with commas), or "" when no day is set. */
     fun label(mask: Int, locale: Locale = Locale.getDefault()): String =
         DayOfWeek.entries.filter { contains(mask, it) }
-            .joinToString(" · ") { it.getDisplayName(TextStyle.SHORT, locale) }
+            .joinToString(", ") { it.getDisplayName(TextStyle.SHORT, locale) }
 }

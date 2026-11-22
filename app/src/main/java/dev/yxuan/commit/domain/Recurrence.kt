@@ -16,10 +16,10 @@ object Recurrence {
     fun isRecurring(todo: TodoEntity): Boolean =
         (todo.recurIntervalDays ?: 0) > 0 || (todo.recurDays ?: 0) > 0
 
-    /** "every day" / "every 4 days". */
-    fun intervalLabel(days: Int): String = if (days == 1) "every day" else "every $days days"
+    /** "Every day" / "Every 4 days". */
+    fun intervalLabel(days: Int): String = if (days == 1) "Every day" else "Every $days days"
 
-    /** Label for interval ("every 4 days") or calendar ("every Sun", "Mon · Thu") recurrence. */
+    /** Label for interval ("Every 4 days") or calendar ("Mon, Thu") recurrence. */
     fun label(todo: TodoEntity): String {
         val days = todo.recurDays ?: 0
         if (days > 0) return Weekdays.label(days)

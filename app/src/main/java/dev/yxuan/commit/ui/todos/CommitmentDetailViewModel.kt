@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
 
 class CommitmentDetailViewModel(
     savedStateHandle: SavedStateHandle,
-    commitments: CommitmentRepository,
+    private val commitments: CommitmentRepository,
     private val todos: TodoRepository,
 ) : ViewModel() {
     val commitmentId: String = savedStateHandle.toRoute<CommitmentRoute>().id
@@ -24,13 +24,25 @@ class CommitmentDetailViewModel(
     val commitment: StateFlow<CommitmentEntity?> =
         commitments.observe(commitmentId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    val open: StateFlow<List<TodoEntity>> =
-        todos.observeOpen(commitmentId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val open: StateFlow<List<TodoEntity>?> =
+        todos.observeOpen(commitmentId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val done: StateFlow<List<TodoEntity>> =
         todos.observeDone(commitmentId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun setDone(id: String, done: Boolean) {
         viewModelScope.launch { todos.setDone(id, done) }
+    }
+
+    fun update(name: String, color: Int, showInWidget: Boolean) {
+        viewModelScope.launch { commitments.update(commitmentId, name, color, showInWidget) }
+    }
+
+    fun move(delta: Int) {
+        viewModelScope.launch { commitments.move(commitmentId, delta) }
+    }
+
+    fun archive() {
+        viewModelScope.launch { commitments.archive(commitmentId) }
     }
 }

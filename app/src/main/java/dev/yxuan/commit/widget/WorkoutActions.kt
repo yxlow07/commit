@@ -8,6 +8,7 @@ import dev.yxuan.commit.appContainer
 
 val RoutineIdParam = ActionParameters.Key<String>("routine_id")
 val DeltaParam = ActionParameters.Key<Int>("delta")
+val OpenWorkoutParam = ActionParameters.Key<Boolean>(dev.yxuan.commit.MainActivity.EXTRA_OPEN_WORKOUT)
 
 // Workout tab buttons (F5.2–F5.4). Each one writes through WorkoutRepository, which redraws the widget.
 

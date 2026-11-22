@@ -7,6 +7,7 @@ import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
 
 /** Per-commitment numbers for the history screen (F8.3). */
@@ -61,8 +62,16 @@ object Stats {
     }
 
     /** completionId → late? (absent when there is no due date to compare with). */
-    fun lateness(rows: List<CompletionRow>, zone: ZoneId): Map<String, Boolean> {
-        val result = HashMap<String, Boolean>()
+    fun lateness(rows: List<CompletionRow>, zone: ZoneId): Map<String, Boolean> =
+        daysLate(rows, zone).mapValues { it.value != null }
+
+    /**
+     * completionId → days late, for the late ones: 0 when finished on the due day but after its time,
+     * otherwise whole days past the due day. On-time completions map to null; completions with no due
+     * date are absent.
+     */
+    fun daysLate(rows: List<CompletionRow>, zone: ZoneId): Map<String, Int?> {
+        val result = HashMap<String, Int?>()
         rows.groupBy { it.todoId }.forEach { (_, done) ->
             val sorted = done.sortedBy { it.doneAt }
             val first = sorted.first()
@@ -71,17 +80,31 @@ object Stats {
                 for (c in sorted) {
                     val day = c.doneAt.date(zone)
                     val dueDay = previous?.let { nextDueAfter(first, it) } ?: firstDueDay(first, zone)
-                    if (dueDay != null) result[c.completionId] = day.isAfter(dueDay)
+                    if (dueDay != null) result[c.completionId] = if (day.isAfter(dueDay)) ChronoUnit.DAYS.between(dueDay, day).toInt() else null
                     previous = day
                 }
             } else {
                 for (c in sorted) {
                     val dueAt = c.dueAt ?: continue
-                    result[c.completionId] = if (c.hasTime) c.doneAt > dueAt else c.doneAt.date(zone).isAfter(dueAt.date(zone))
+                    val days = ChronoUnit.DAYS.between(dueAt.date(zone), c.doneAt.date(zone)).toInt()
+                    result[c.completionId] = when {
+                        days > 0 -> days
+                        c.hasTime && c.doneAt > dueAt -> 0
+                        else -> null
+                    }
                 }
             }
         }
         return result
+    }
+
+    /** todoId → current chore streak (completions in a row on time), for chores with a streak above 0. */
+    fun currentStreaks(rows: List<CompletionRow>, clock: Clock): Map<String, Int> {
+        val lateness = lateness(rows, clock.zone)
+        val today = LocalDate.now(clock)
+        return rows.filter { it.isRecurring }.groupBy { it.todoId }
+            .mapValues { (_, done) -> choreStreak(done, lateness, today, clock.zone) }
+            .filterValues { it > 0 }
     }
 
     private fun choreStreak(done: List<CompletionRow>, lateness: Map<String, Boolean>, today: LocalDate, zone: ZoneId): Int {

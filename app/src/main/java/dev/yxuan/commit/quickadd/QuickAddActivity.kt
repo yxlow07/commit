@@ -3,22 +3,14 @@ package dev.yxuan.commit.quickadd
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -36,6 +28,10 @@ import dev.yxuan.commit.appContainer
 import dev.yxuan.commit.data.db.entity.CommitmentType
 import dev.yxuan.commit.data.repo.Due
 import dev.yxuan.commit.domain.theme.ActiveTheme
+import dev.yxuan.commit.ui.components.DialogPanel
+import dev.yxuan.commit.ui.components.PrimaryButton
+import dev.yxuan.commit.ui.components.TextAction
+import dev.yxuan.commit.ui.theme.Commit
 import dev.yxuan.commit.ui.theme.CommitTheme
 import dev.yxuan.commit.ui.todos.TodoForm
 import dev.yxuan.commit.widget.CommitmentIdParam
@@ -43,7 +39,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
- * Dialog-style popup over the home screen, opened by the widget's "+ Add" button (F3.4).
+ * Dialog-style popup over the home screen, opened by the widget's add button and the app (F3.4).
  * Translucent theme, so the home screen stays visible behind it. Save writes to Room and closes.
  */
 class QuickAddActivity : ComponentActivity() {
@@ -57,15 +53,13 @@ class QuickAddActivity : ComponentActivity() {
         val themeFlow = container.themeRepository.observeActive()
 
         setContent {
-            val activeTheme by themeFlow.collectAsState(ActiveTheme.Dynamic)
+            val activeTheme by themeFlow.collectAsState(ActiveTheme.Default)
             CommitTheme(active = activeTheme) {
                 val commitments by commitmentsFlow.collectAsState(emptyList())
                 var title by rememberSaveable { mutableStateOf("") }
                 var commitmentId by rememberSaveable { mutableStateOf(initialCommitment) }
                 var due by remember { mutableStateOf<Due?>(null) }
                 var repeatDays by rememberSaveable { mutableStateOf<Int?>(null) }
-                var recurDays by rememberSaveable { mutableStateOf<Int?>(null) }
-                var reminderLeadMinutes by rememberSaveable { mutableStateOf<Int?>(null) }
                 var saving by remember { mutableStateOf(false) }
 
                 // A workout tab (or a stale id) can't hold todos: fall back to the first todo commitment.
@@ -81,17 +75,13 @@ class QuickAddActivity : ComponentActivity() {
                     if (canSave && target != null) {
                         saving = true
                         lifecycleScope.launch {
-                            container.todoRepository.add(target, title, due, repeatDays, recurDays, reminderLeadMinutes)
+                            container.todoRepository.add(target, title, due, repeatDays)
                             finish()
                         }
                     }
                 }
 
-                QuickAddDialog(
-                    onDismiss = ::finish,
-                    canSave = canSave,
-                    onSave = save,
-                ) { focus ->
+                QuickAddDialog(onDismiss = ::finish, canSave = canSave, onSave = save) { focus ->
                     TodoForm(
                         title = title,
                         onTitleChange = { title = it },
@@ -102,10 +92,7 @@ class QuickAddActivity : ComponentActivity() {
                         onDueChange = { due = it },
                         repeatDays = repeatDays,
                         onRepeatChange = { repeatDays = it },
-                        recurDays = recurDays,
-                        onRecurDaysChange = { recurDays = it },
-                        reminderLeadMinutes = reminderLeadMinutes,
-                        onReminderLeadChange = { reminderLeadMinutes = it },
+                        compact = true,
                         titleFocusRequester = focus,
                         onDone = save,
                     )
@@ -115,6 +102,10 @@ class QuickAddActivity : ComponentActivity() {
     }
 }
 
+/**
+ * The spec's quick-add popup: `scrim` over the home screen, a `surface` panel (theme radius, 20 dp
+ * sides, 24 dp top). Tapping the scrim or Back cancels; Save is disabled until the title has a character.
+ */
 @Composable
 private fun QuickAddDialog(
     onDismiss: () -> Unit,
@@ -125,32 +116,27 @@ private fun QuickAddDialog(
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
 
-    // Tapping the dimmed area outside the card cancels.
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .background(Commit.colors.scrim)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss)
             .imePadding()
             .padding(16.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Card(
+        DialogPanel(
+            title = "New todo",
+            actions = {
+                TextAction("Cancel", onClick = onDismiss)
+                PrimaryButton("Save todo", onClick = onSave, enabled = canSave)
+            },
             modifier = Modifier
                 .widthIn(max = 480.dp)
-                .fillMaxWidth()
-                // Swallow taps on the card so they don't dismiss.
+                // Swallow taps on the panel so they don't dismiss.
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
         ) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("Add todo", style = MaterialTheme.typography.titleLarge)
-                content(focus)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
-                    Button(onClick = onSave, enabled = canSave, modifier = Modifier.padding(start = 8.dp)) {
-                        Text("Save")
-                    }
-                }
-            }
+            content(focus)
         }
     }
 }

@@ -34,6 +34,18 @@ interface TodoDao {
     )
     fun observeOpenForWidget(): Flow<List<TodoEntity>>
 
+    /**
+     * Todos of the commitments shown on the widget: open ones plus one-off todos finished since
+     * [since], so a just-ticked row can stay visible (checked) until the tab changes.
+     */
+    @Query(
+        "SELECT t.* FROM todos t JOIN commitments c ON c.id = t.commitment_id " +
+            "WHERE t.deleted = 0 AND (t.done_at IS NULL OR t.done_at >= :since) " +
+            "AND c.deleted = 0 AND c.archived = 0 AND c.show_in_widget = 1 " +
+            "ORDER BY t.due_at IS NULL, t.due_at, t.title COLLATE NOCASE"
+    )
+    fun observeForWidget(since: Long): Flow<List<TodoEntity>>
+
     @Query("SELECT * FROM todos WHERE id = :id")
     suspend fun getById(id: String): TodoEntity?
 
@@ -55,6 +67,17 @@ interface TodoDao {
             "WHERE t.deleted = 0 AND t.done_at IS NULL AND c.deleted = 0 AND c.archived = 0"
     )
     suspend fun getOpenInActiveCommitments(): List<TodoEntity>
+
+    /** Live version of [getOpenInActiveCommitments], for the Today screen. */
+    @Query(
+        "SELECT t.* FROM todos t JOIN commitments c ON c.id = t.commitment_id " +
+            "WHERE t.deleted = 0 AND t.done_at IS NULL AND c.deleted = 0 AND c.archived = 0"
+    )
+    fun observeOpenInActiveCommitments(): Flow<List<TodoEntity>>
+
+    /** Specific todos, done or not (the widget keeps just-ticked rows until the tab changes). */
+    @Query("SELECT * FROM todos WHERE id IN (:ids) AND deleted = 0")
+    fun observeByIds(ids: List<String>): Flow<List<TodoEntity>>
 
     /** Every todo including deleted ones, so the alarm scheduler can also cancel stale alarms. */
     @Query("SELECT * FROM todos")

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Rest/work countdown on the widget (F5.6): ticks on its own, with no widget updates.
+     Compact version for short (3x2 / 4x2) widgets; system font, since widgets can't use bundled fonts. -->
+<Chronometer xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/chronometer"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:countDown="true"
+    android:fontFamily="sans-serif-light"
+    android:fontFeatureSettings="tnum"
+    android:gravity="center"
+    android:includeFontPadding="false"
+    android:letterSpacing="-0.03"
+    android:textSize="44sp" />

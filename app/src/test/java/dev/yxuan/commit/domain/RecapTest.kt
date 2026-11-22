@@ -57,11 +57,12 @@ class RecapTest {
     fun morningListsOverdueTodayChoresAndPlannedWorkout() {
         val recap = RecapBuilder(morningClock, Locale.UK).build(RecapKind.MORNING, input())
         val byTitle = recap.sections.associate { it.title to it.lines }
-        assertEquals(listOf("Essay · Study · Overdue · 2d"), byTitle["Overdue"])
-        assertEquals(listOf("Read · Study · Today", "Quiz · Study · Today 14:00"), byTitle["Due today"])
-        assertEquals(listOf("Laundry · chore"), byTitle["Chores"])
-        assertEquals(listOf("Today: Push Day"), byTitle["Workout"])
-        assertEquals("1 overdue · 3 due today · Push Day", recap.summary)
+        assertEquals(listOf("Essay, Late"), byTitle["Overdue"])
+        assertEquals(listOf("Read, Study", "Quiz, 14:00"), byTitle["Due today"])
+        assertEquals(listOf("Laundry, Home"), byTitle["Chores"])
+        assertEquals(listOf("Push Day, workout"), byTitle["Workout"])
+        assertEquals("4 things today, 1 overdue", recap.title)
+        assertEquals("Essay, Read, Quiz and 2 more", recap.summary)
         assertFalse(recap.isEmpty)
     }
 
@@ -79,12 +80,13 @@ class RecapTest {
         val recap = RecapBuilder(nightClock, Locale.UK).build(RecapKind.NIGHT, input(completed, listOf(session)))
         val byTitle = recap.sections.associate { it.title to it.lines }
         // Grouped by commitment order (Study before Home), then by time.
-        assertEquals(listOf("Study · Notes", "Study · Flashcards", "Home · Bins"), byTitle["Done today"])
-        assertEquals(listOf("Push Day · 42 min · 3,450 kg"), byTitle["Workout"])
+        assertEquals(listOf("Notes, Study", "Flashcards, Study", "Bins, Home"), byTitle["Done today"])
+        assertEquals(listOf("Push Day, 42 min, 3,450 kg"), byTitle["Workout"])
         // At 22:00 the 14:00 quiz is overdue too; the chore is still due today.
         assertEquals(4, byTitle["Still open"]!!.size)
-        assertEquals(listOf("Slides · Study · Tomorrow 10:00"), byTitle["Due tomorrow"])
-        assertEquals("3 done (2 Study, 1 Home) · Push Day · 4 still open · 1 due tomorrow", recap.summary)
+        assertEquals(listOf("Slides, Sun"), byTitle["Due tomorrow"])
+        assertEquals("3 done today, 4 still open", recap.title)
+        assertEquals("Still open: Essay, Laundry, Read and 1 more. Due tomorrow: Slides. Push Day took 42 min, 3,450 kg.", recap.body)
     }
 
     @Test
@@ -100,7 +102,7 @@ class RecapTest {
         assertEquals(1 or 8, mask)
         assertTrue(Weekdays.isPlanned(mask, LocalDate.of(2026, 11, 23))) // Monday
         assertFalse(Weekdays.isPlanned(mask, LocalDate.of(2026, 11, 24)))
-        assertEquals("Mon · Thu", Weekdays.label(mask, Locale.UK))
+        assertEquals("Mon, Thu", Weekdays.label(mask, Locale.UK))
         assertEquals(1, Weekdays.toggle(mask, DayOfWeek.THURSDAY))
     }
 }

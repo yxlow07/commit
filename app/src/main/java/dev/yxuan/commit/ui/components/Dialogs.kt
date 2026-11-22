@@ -1,0 +1,115 @@
+package dev.yxuan.commit.ui.components
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Text
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import dev.yxuan.commit.ui.theme.Commit
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneOffset
+
+/** Dialog panel: `surface`, the theme's panel radius, 20 dp sides, 24 dp top, 20 dp between groups. */
+@Composable
+fun CommitDialog(
+    title: String,
+    onDismiss: () -> Unit,
+    actions: @Composable RowScope.() -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        DialogPanel(title = title, actions = actions, modifier = Modifier.padding(horizontal = 16.dp), content = content)
+    }
+}
+
+/** The panel itself, also used by the quick-add activity. */
+@Composable
+fun DialogPanel(
+    title: String,
+    actions: @Composable RowScope.() -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val c = Commit.colors
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(Commit.shapes.panel))
+            .background(c.surface)
+            .verticalScroll(rememberScrollState())
+            .padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+    ) {
+        Text(title, style = Commit.type.titleDialog, color = c.ink, modifier = Modifier.semantics { heading() })
+        content()
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+            actions()
+        }
+    }
+}
+
+/** System-style date picker (Material, themed by the tokens). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DatePickerSheet(initial: LocalDate?, onPick: (LocalDate) -> Unit, onDismiss: () -> Unit) {
+    // DatePicker works in UTC-midnight millis.
+    val state = rememberDatePickerState(
+        initialSelectedDateMillis = (initial ?: LocalDate.now()).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+    )
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextAction("OK", onClick = {
+                state.selectedDateMillis?.let { onPick(Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()) }
+                onDismiss()
+            })
+        },
+        dismissButton = { TextAction("Cancel", onClick = onDismiss, muted = true) },
+    ) {
+        DatePicker(state = state)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TimePickerSheet(initial: LocalTime?, onPick: (LocalTime) -> Unit, onDismiss: () -> Unit) {
+    val start = initial ?: LocalTime.of(9, 0)
+    val state = rememberTimePickerState(initialHour = start.hour, initialMinute = start.minute, is24Hour = true)
+    CommitDialog(
+        title = "Time",
+        onDismiss = onDismiss,
+        actions = {
+            TextAction("Cancel", onClick = onDismiss, muted = true)
+            PrimaryButton("Set time", onClick = {
+                onPick(LocalTime.of(state.hour, state.minute))
+                onDismiss()
+            })
+        },
+    ) {
+        TimePicker(state = state, modifier = Modifier.align(Alignment.CenterHorizontally))
+    }
+}

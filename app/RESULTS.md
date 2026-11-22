@@ -537,3 +537,60 @@ A review of M9 and M10 found that neither build had been installed on the emulat
 ## Pending
 
 - The web deploy went to a **preview** (`m9-m10.commit-45e.pages.dev`), because Wrangler names the deployment after the git branch. Production (commit.yxuan.dev) still runs the old build until it's deployed with `--branch master` (or from `master`).
+
+
+---
+
+# Results: Design pass (App Design Spec)
+
+Date: 2026-11-22. Spec: [App Design Spec.md](App%20Design%20Spec.md). Plan: last section of [PLAN.md](PLAN.md).
+
+## Status
+
+| Area | Status |
+| --- | --- |
+| Theme format v2 with the spec's tokens; v1 files mapped; Automatic / Light / Dark built-ins (phone and web) | Done |
+| Hanken Grotesk bundled (variable font, OFL licence in `app/licenses/`) | Done |
+| Tokens, type scale (tabular figures), radii, spacing; Material scheme from tokens | Done |
+| Shared components (`ui/components/`) | Done |
+| Due label rules in one formatter, used by app, widget and recaps | Done |
+| Today screen, bottom nav (Today, History, Workouts, Settings) | Done |
+| Commitment detail with sections, Done by week with "On time" / "1 day late"; "Add to …" | Done |
+| Quick-add popup (scrim, segmented commitments, date / time / No date, repeat every N days) | Done |
+| Todo editor (also weekday repeat and reminder lead time) | Done |
+| History: 12-week heatmap, timeline with "N days late" / "N in a row"; best set, line chart, sessions | Done (Vico removed) |
+| Workouts tab, routine editor, live workout, session detail, Settings, Themes, recap screen | Done |
+| Widget: text tabs + "More" picker, rows, ticked rows kept in place, footer, empty states, sizes, workout panel | Done |
+| Notifications: recap titles/bodies, "Open recap", reminder "Due 18:00, Study", workout "Resting" | Done |
+| Web app: reads theme v2 (tokens mapped onto its CSS variables) | Done; the web layout itself is unchanged |
+
+## Verification
+
+- **Android unit tests:** 60 of 60 pass. New: `DueLabelsTest` (rules table, Done weekday, full dates, timeliness), `TickedRowsTest` (widget keeps ticked rows in place), `StatsTest.daysLateAndCurrentStreaks`; `ThemeParserTest` rewritten for v2 (+ v1 mapping, built-ins, "no colours section"); `RecapTest` and `ReminderTextTest` updated for the spec copy. Instrumented tests compile.
+- **Web:** `npm test` 38 of 38 (theme v2 cases mirror the Kotlin ones, public example copies match), `typecheck`, `lint`, `build` clean.
+- **Emulator (Medium Phone, API 37), real synced data:**
+  - Today, Commitment detail (Open and Done), quick-add, Todo editor, History (Tasks and Workouts), Workouts, routine editor and exercise dialog, live workout, Settings, Themes: checked against the canvas in Light, and Today / Themes / widget in Dark (status bar icons follow the theme).
+  - Widget at 4x2: 1 row fits cleanly (rows are fitted to the real height); ticking keeps the row checked and struck through in its place; unticking restores it.
+  - Widget at about 4x4: 3 rows and the footer; the full workout panel (exercise, "Push Day, 1 of 1", segments, steppers with units, "Done set").
+  - Workout from the widget: Start → steppers → Done set → rest countdown with "Add 30 s" / "Skip rest" → auto-advance to set 2 → "Workout done, 2 min, 960 kg, 2 sets" with "Open summary" / "Done". At 4x2 the compact panel is used.
+  - Edit for a workout commitment (on the Workouts tab), archive.
+
+## Found and fixed while checking
+
+- Widget rows overflowed at 4x2: `SizeMode.Responsive` reports the size bucket, not the real size. Now `SizeMode.Exact`, with the number of rows worked out from the height.
+- A ticked chore jumped down the widget list (its next due date moves); ticked rows now keep their position.
+- The workout panel didn't fit a 4x2 widget: added a compact form (one header line, smaller countdown, 44 dp buttons).
+- The countdown's RemoteViews took all remaining height and pushed the rest buttons out: fixed height.
+- Workout commitments had no way to be edited or archived (Today and detail send them to Workouts): "Edit Gym" on the Workouts tab.
+- "Mon, Thu, Was due …" capitalisation; text buttons that start a line now align with the 24 dp edge.
+
+## Known limitations
+
+- **The workout notification isn't dark.** Android colourises only foreground-service and media notifications; it is tinted with `ink` instead.
+- **Widget countdown reads "00:12"**, not "0:12": the system Chronometer's format.
+- **"More" tab picker** is unit-tested (`visibleTabs`) but wasn't exercised on the emulator, which had only two commitments.
+- **Undated widget rows** are ordered by title: the database has no created-at column.
+- **Not checked on device:** TalkBack names and selected states (set in code), text at 130 %, a real phone's widget corner radius and tab baselines.
+- **The web app's layout** keeps its current design; it now uses the greyscale tokens through its CSS variables, so its default look is grey too.
+- **Test data in the synced account:** a "Gym" workout commitment (archived), its "Push Day" routine, two short workout sessions in History; plus the M10 test todos from earlier.
+- **Build environment:** with VS Code open, `app/build` and the Kotlin daemon's caches got locked mid-build. Command-line builds here used an init script that moves the build folder outside the workspace and `-Pkotlin.compiler.execution.strategy=in-process`; the project's build files are unchanged.

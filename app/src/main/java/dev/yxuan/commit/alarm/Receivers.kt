@@ -36,15 +36,17 @@ class AlarmReceiver : BroadcastReceiver() {
                     alarmScheduler.clearSnooze(id)
                     val todo = todoRepository.get(id)
                     if (todo != null && !todo.deleted && todo.doneAt == null && todo.dueAt != null) {
-                        // Early with a lead time, on time, or late after a snooze (not the list's "Overdue").
-                        val label = ReminderText.label(todo.dueAt, clock.millis(), clock.zone)
+                        // Early with a lead time, on time, or late after a snooze: "Due 18:00, Study".
+                        val commitment = database.commitmentDao().getById(todo.commitmentId)?.name
+                        val label = ReminderText.label(todo.dueAt, clock.millis(), clock.zone, commitment)
                         Notifications.post(context, Notifications.todoNotificationId(id), Notifications.todoReminder(context, todo, label))
                     }
                 }
                 AlarmKind.CHORE_DUE -> {
                     val todo = todoRepository.get(id)
                     if (todo != null && !todo.deleted && Recurrence.isRecurring(todo) && !TodoItem.of(todo, clock).isDone) {
-                        val text = "Due today · ${Recurrence.label(todo)}"
+                        val commitment = database.commitmentDao().getById(todo.commitmentId)?.name
+                        val text = listOfNotNull("Due today", Recurrence.label(todo).let { if (it.startsWith("Every")) it.replaceFirstChar(Char::lowercase) else it }, commitment).joinToString(", ")
                         Notifications.post(context, Notifications.todoNotificationId(id), Notifications.todoReminder(context, todo, text))
                     }
                 }

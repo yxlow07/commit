@@ -1,42 +1,19 @@
 package dev.yxuan.commit.ui.todos
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,25 +24,39 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import dev.yxuan.commit.data.db.entity.CommitmentEntity
 import dev.yxuan.commit.data.repo.Due
 import dev.yxuan.commit.domain.Weekdays
-import dev.yxuan.commit.ui.format.DueFormatter
+import dev.yxuan.commit.ui.components.CommitCheckbox
+import dev.yxuan.commit.ui.components.CommitTextField
+import dev.yxuan.commit.ui.components.DatePickerSheet
+import dev.yxuan.commit.ui.components.FieldButton
+import dev.yxuan.commit.ui.components.FieldLabel
+import dev.yxuan.commit.ui.components.SegmentedControl
+import dev.yxuan.commit.ui.components.TextAction
+import dev.yxuan.commit.ui.components.TextTabs
+import dev.yxuan.commit.ui.components.TimePickerSheet
+import dev.yxuan.commit.ui.format.DueLabels
+import dev.yxuan.commit.ui.theme.Commit
+import dev.yxuan.commit.ui.theme.tnum
 import java.time.DayOfWeek
-import java.time.Instant
-import java.time.LocalDate
-import java.time.LocalTime
-import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 
-/** Title, commitment, due and recurrence fields; shared by the todo editor and the widget quick-add popup. */
+/**
+ * Title, commitment, due and repeat fields, shared by the quick-add popup ([compact]: the spec's
+ * popup, interval repeat only) and the todo editor (also weekday repeat and reminder lead time).
+ */
 @Composable
 fun TodoForm(
     title: String,
@@ -77,275 +68,179 @@ fun TodoForm(
     onDueChange: (Due?) -> Unit,
     repeatDays: Int?,
     onRepeatChange: (Int?) -> Unit,
+    modifier: Modifier = Modifier,
     recurDays: Int? = null,
     onRecurDaysChange: (Int?) -> Unit = {},
     reminderLeadMinutes: Int? = null,
     onReminderLeadChange: (Int?) -> Unit = {},
-    modifier: Modifier = Modifier,
+    compact: Boolean = false,
     titleFocusRequester: FocusRequester? = null,
     onDone: (() -> Unit)? = null,
 ) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        OutlinedTextField(
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        CommitTextField(
             value = title,
             onValueChange = onTitleChange,
-            label = { Text("Title") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(
-                capitalization = KeyboardCapitalization.Sentences,
-                imeAction = ImeAction.Done,
-            ),
+            label = "Title",
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { onDone?.invoke() }),
-            modifier = Modifier
-                .fillMaxWidth()
-                .let { if (titleFocusRequester != null) it.focusRequester(titleFocusRequester) else it },
+            modifier = if (titleFocusRequester != null) Modifier.focusRequester(titleFocusRequester) else Modifier,
         )
-        CommitmentDropdown(commitments, commitmentId, onCommitmentChange)
-        DueFields(due, onDueChange, reminderLeadMinutes, onReminderLeadChange)
-        RepeatField(repeatDays, onRepeatChange, recurDays, onRecurDaysChange)
+        CommitmentField(commitments, commitmentId, onCommitmentChange)
+        DueField(due, onDueChange, onReminderLeadChange)
+        if (!compact && due?.time != null) LeadField(reminderLeadMinutes, onReminderLeadChange)
+        RepeatField(repeatDays, onRepeatChange, recurDays, onRecurDaysChange, compact)
     }
 }
 
-/** "Repeat every N days" (F4.1, F4.2) or calendar weekdays (F4.3). Off = one-off todo. */
+/** Segmented control of commitments (workout commitments are never offered). Scrolls past four. */
+@Composable
+private fun CommitmentField(commitments: List<CommitmentEntity>, selected: String?, onSelect: (String) -> Unit) {
+    if (commitments.isEmpty()) return
+    Column {
+        FieldLabel("Commitment")
+        if (commitments.size <= 4) {
+            SegmentedControl(commitments.map { it.id }, selected, onSelect, label = { id -> commitments.first { it.id == id }.name })
+        } else {
+            val index = commitments.indexOfFirst { it.id == selected }.coerceAtLeast(0)
+            Row(Modifier.horizontalScroll(rememberScrollState())) {
+                TextTabs(commitments.map { it.name }, index, { onSelect(commitments[it].id) }, gap = 18.dp)
+            }
+        }
+    }
+}
+
+/** [Fri 28 Nov] [17:00] No date. The time button reads "Add time" until set. */
+@Composable
+private fun DueField(due: Due?, onChange: (Due?) -> Unit, onLeadChange: (Int?) -> Unit) {
+    var showDate by remember { mutableStateOf(false) }
+    var showTime by remember { mutableStateOf(false) }
+    Column {
+        FieldLabel("Due")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            FieldButton(
+                text = due?.let { DueLabels.date(it.date) } ?: "Add date",
+                placeholder = due == null,
+                onClick = { showDate = true },
+                modifier = Modifier.weight(1f),
+            )
+            if (due != null) {
+                FieldButton(
+                    text = due.time?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "Add time",
+                    placeholder = due.time == null,
+                    onClick = { showTime = true },
+                    modifier = Modifier.width(100.dp),
+                )
+                TextAction("No date", onClick = { onChange(null); onLeadChange(null) }, muted = true)
+            }
+        }
+    }
+    if (showDate) DatePickerSheet(due?.date, { onChange(Due(it, due?.time)) }, { showDate = false })
+    if (showTime && due != null) TimePickerSheet(due.time, { onChange(due.copy(time = it)) }, { showTime = false })
+}
+
+/** Reminder lead time for todos with a time (F7.1): at the time, or 15/30/60 minutes before. */
+@Composable
+private fun LeadField(lead: Int?, onChange: (Int?) -> Unit) {
+    val options = listOf(0, 15, 30, 60)
+    Column {
+        FieldLabel("Remind me")
+        SegmentedControl(options, lead ?: 0, { onChange(it.takeIf { m -> m > 0 }) }, label = {
+            when (it) {
+                0 -> "At the time"
+                60 -> "1 h before"
+                else -> "$it min before"
+            }
+        })
+    }
+}
+
+/**
+ * "Repeat every [4] days after I finish it" (F4.2). The editor also offers fixed weekdays (F4.3).
+ */
 @Composable
 private fun RepeatField(
     repeatDays: Int?,
     onRepeatChange: (Int?) -> Unit,
     recurDays: Int?,
     onRecurDaysChange: (Int?) -> Unit,
+    compact: Boolean,
 ) {
-    val isRepeating = repeatDays != null || (recurDays != null && recurDays > 0)
-    var text by rememberSaveable { mutableStateOf((repeatDays ?: 7).toString()) }
-    var mode by rememberSaveable {
-        mutableStateOf(if (recurDays != null && recurDays > 0) "weekdays" else "interval")
-    }
+    val c = Commit.colors
+    val repeating = repeatDays != null || (recurDays ?: 0) > 0
+    var daysText by rememberSaveable { mutableStateOf((repeatDays ?: 4).toString()) }
+    val weekdays = (recurDays ?: 0) > 0
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Switch(
-                checked = isRepeating,
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.heightIn(min = 44.dp)) {
+            CommitCheckbox(
+                checked = repeating,
                 onCheckedChange = { on ->
-                    if (!on) {
-                        onRepeatChange(null)
-                        onRecurDaysChange(null)
-                    } else {
-                        if (mode == "weekdays") {
-                            onRepeatChange(null)
-                            onRecurDaysChange(recurDays?.takeIf { it > 0 } ?: 1)
-                        } else {
-                            onRecurDaysChange(null)
-                            onRepeatChange(text.toIntOrNull()?.coerceAtLeast(1) ?: 1)
-                        }
-                    }
+                    if (on) onRepeatChange(daysText.toIntOrNull()?.coerceAtLeast(1) ?: 4)
+                    else { onRepeatChange(null); onRecurDaysChange(null) }
                 },
+                title = "Repeat",
+                modifier = Modifier.padding(end = 4.dp),
             )
-            Text(if (isRepeating) "Repeating chore" else "Repeat")
-        }
-
-        if (isRepeating) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = mode == "interval",
-                    onClick = {
-                        mode = "interval"
-                        onRecurDaysChange(null)
-                        onRepeatChange(text.toIntOrNull()?.coerceAtLeast(1) ?: 1)
+            if (!repeating || !weekdays) {
+                Text("Repeat every ", style = Commit.type.body, color = c.ink)
+                // The number is editable once ticked ("tap 4 to change it").
+                BasicTextField(
+                    value = daysText,
+                    onValueChange = { v ->
+                        daysText = v.filter(Char::isDigit).take(3)
+                        if (repeating) onRepeatChange(daysText.toIntOrNull()?.coerceAtLeast(1) ?: 1)
                     },
-                    label = { Text("Every N days") },
+                    enabled = repeating,
+                    singleLine = true,
+                    textStyle = Commit.type.body.tnum().copy(color = c.ink, textDecoration = if (repeating) TextDecoration.Underline else null),
+                    cursorBrush = SolidColor(c.ink),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.width((10 * daysText.length.coerceAtLeast(1) + 4).dp).semantics { contentDescription = "Days between repeats" },
                 )
-                FilterChip(
-                    selected = mode == "weekdays",
-                    onClick = {
-                        mode = "weekdays"
-                        onRepeatChange(null)
-                        onRecurDaysChange(recurDays?.takeIf { it > 0 } ?: 1)
-                    },
-                    label = { Text("Specific weekdays") },
-                )
-            }
-
-            if (mode == "interval") {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Every")
-                    OutlinedTextField(
-                        value = text,
-                        onValueChange = { value ->
-                            text = value.filter(Char::isDigit).take(3)
-                            onRepeatChange(text.toIntOrNull()?.coerceAtLeast(1) ?: 1)
-                        },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.width(80.dp),
-                    )
-                    Text(if ((repeatDays ?: 1) == 1) "day" else "days")
-                }
+                Text(" days after I finish it", style = Commit.type.body, color = c.ink, maxLines = 1)
             } else {
-                val mask = recurDays ?: 0
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("On days", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
-                        DayOfWeek.entries.forEach { day ->
-                            FilterChip(
-                                selected = Weekdays.contains(mask, day),
-                                onClick = {
-                                    // Keep at least one day: unselecting the last one does nothing.
-                                    val next = Weekdays.toggle(mask, day)
-                                    if (next > 0) onRecurDaysChange(next)
-                                },
-                                label = { Text(day.getDisplayName(TextStyle.NARROW, Locale.getDefault())) },
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                    }
-                }
+                Text("Repeat on fixed weekdays", style = Commit.type.body, color = c.ink)
             }
         }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun CommitmentDropdown(
-    commitments: List<CommitmentEntity>,
-    selectedId: String?,
-    onSelect: (String) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val selected = commitments.firstOrNull { it.id == selectedId }
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
-        OutlinedTextField(
-            value = selected?.name ?: "",
-            onValueChange = {},
-            readOnly = true,
-            label = { Text("Commitment") },
-            leadingIcon = selected?.let { { ColorDot(it.color) } },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
-        )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            commitments.forEach { c ->
-                DropdownMenuItem(
-                    text = { Text(c.name) },
-                    leadingIcon = { ColorDot(c.color) },
-                    onClick = {
-                        onSelect(c.id)
-                        expanded = false
-                    },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun ColorDot(color: Int, modifier: Modifier = Modifier) {
-    Box(modifier.size(12.dp).background(Color(color), CircleShape))
-}
-
-/** Optional date, then optional time once a date is set (F2.1), and optional reminder lead time (F7.1). */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun DueFields(
-    due: Due?,
-    onChange: (Due?) -> Unit,
-    reminderLeadMinutes: Int?,
-    onReminderLeadChange: (Int?) -> Unit,
-) {
-    var showDate by remember { mutableStateOf(false) }
-    var showTime by remember { mutableStateOf(false) }
-
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.Center,
-        ) {
-            AssistChip(
-                onClick = { showDate = true },
-                label = { Text(due?.let { DueFormatter.formatDate(it.date) } ?: "Add date") },
-                leadingIcon = { Icon(Icons.Default.CalendarToday, null, Modifier.size(AssistChipDefaults.IconSize)) },
+        if (repeating && !compact) {
+            TextTabs(
+                items = listOf("After I finish it", "On weekdays"),
+                selected = if (weekdays) 1 else 0,
+                onSelect = { i ->
+                    if (i == 0) { onRecurDaysChange(null); onRepeatChange(daysText.toIntOrNull()?.coerceAtLeast(1) ?: 4) }
+                    else { onRepeatChange(null); onRecurDaysChange(recurDays?.takeIf { it > 0 } ?: 1) }
+                },
+                modifier = Modifier.padding(start = 44.dp),
+                style = Commit.type.label,
+                gap = 18.dp,
             )
-            if (due != null) {
-                AssistChip(
-                    onClick = { showTime = true },
-                    label = { Text(due.time?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "Add time") },
-                    leadingIcon = { Icon(Icons.Default.Schedule, null, Modifier.size(AssistChipDefaults.IconSize)) },
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = {
-                        if (due.time != null) {
-                            onChange(due.copy(time = null))
-                            onReminderLeadChange(null)
-                        } else {
-                            onChange(null)
-                            onReminderLeadChange(null)
-                        }
-                    }) {
-                        Icon(Icons.Default.Close, contentDescription = if (due.time != null) "Clear time" else "Clear date")
-                    }
-                }
-            }
-        }
-
-        if (due?.time != null) {
-            val lead = reminderLeadMinutes ?: 0
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Reminder alert", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(
-                        0 to "At due time",
-                        15 to "15m before",
-                        30 to "30m before",
-                        60 to "1h before",
-                    ).forEach { (minutes, label) ->
-                        FilterChip(
-                            selected = lead == minutes,
-                            onClick = { onReminderLeadChange(if (minutes == 0) null else minutes) },
-                            label = { Text(label) },
-                        )
-                    }
-                }
-            }
+            if (weekdays) WeekdayPicker(recurDays ?: 0, onRecurDaysChange)
         }
     }
+}
 
-    if (showDate) {
-        // DatePicker works in UTC-midnight millis.
-        val state = rememberDatePickerState(
-            initialSelectedDateMillis = (due?.date ?: LocalDate.now())
-                .atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-        )
-        DatePickerDialog(
-            onDismissRequest = { showDate = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    state.selectedDateMillis?.let { millis ->
-                        val date = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
-                        onChange(Due(date, due?.time))
+/** Mon…Sun as text toggles: selected Bold `ink`. At least one day stays selected. */
+@Composable
+private fun WeekdayPicker(mask: Int, onChange: (Int?) -> Unit) {
+    val c = Commit.colors
+    Row(Modifier.fillMaxWidth().padding(start = 44.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        DayOfWeek.entries.forEach { day ->
+            val on = Weekdays.contains(mask, day)
+            val name = day.getDisplayName(TextStyle.SHORT, Locale.getDefault())
+            Text(
+                name,
+                style = Commit.type.label.copy(fontWeight = if (on) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal),
+                color = if (on) c.ink else c.muted,
+                modifier = Modifier
+                    .heightIn(min = 44.dp)
+                    .clickable(role = Role.Checkbox) {
+                        val next = Weekdays.toggle(mask, day)
+                        if (next > 0) onChange(next)
                     }
-                    showDate = false
-                }) { Text("OK") }
-            },
-            dismissButton = { TextButton(onClick = { showDate = false }) { Text("Cancel") } },
-        ) {
-            DatePicker(state = state)
+                    .padding(horizontal = 4.dp, vertical = 12.dp)
+                    .semantics { contentDescription = "$name, " + if (on) "selected" else "not selected" },
+            )
         }
-    }
-
-    if (showTime && due != null) {
-        val initial = due.time ?: LocalTime.of(9, 0)
-        val state = rememberTimePickerState(initialHour = initial.hour, initialMinute = initial.minute, is24Hour = true)
-        AlertDialog(
-            onDismissRequest = { showTime = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    onChange(due.copy(time = LocalTime.of(state.hour, state.minute)))
-                    showTime = false
-                }) { Text("OK") }
-            },
-            dismissButton = { TextButton(onClick = { showTime = false }) { Text("Cancel") } },
-            text = { TimePicker(state = state) },
-        )
     }
 }

@@ -1,20 +1,18 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "name": "Forest",
   "light": {
-    "primary": "#2E6B30",
-    "onPrimary": "#FFFFFF",
-    "primaryContainer": "#C8EFC0",
-    "onPrimaryContainer": "#002204",
-    "secondary": "#7A5B2E",
-    "secondaryContainer": "#FFDDB0",
-    "background": "#F7F8F2",
+    "ink": "#1F2A1E",
+    "textStrong": "#3E4A3C",
+    "muted": "#5A6657",
+    "faint": "#97A193",
+    "track": "#DFE4DA",
+    "fill": "#ECEFE7",
     "surface": "#FFFFFF",
-    "onSurface": "#1A1C18",
-    "surfaceVariant": "#ECEFE4",
-    "onSurfaceVariant": "#53604F",
-    "outline": "#D8DDCF"
+    "background": "#F5F6F0"
   },
-  "shape": { "cornerRadius": 8 },
+  "shape": {
+    "cornerRadius": 12
+  },
   "font": "serif"
 }

@@ -2,8 +2,12 @@ package dev.yxuan.commit.ui
 
 import kotlinx.serialization.Serializable
 
+/** Today (start). [newCommitment] opens the new-commitment dialog (widget empty state). */
 @Serializable
-object CommitmentsRoute
+data class TodayRoute(val newCommitment: Boolean = false)
+
+@Serializable
+object WorkoutsRoute
 
 @Serializable
 data class CommitmentRoute(val id: String)

@@ -37,25 +37,29 @@ object WorkoutNotification {
             .setOnlyAlertOnce(true)
             .setSilent(true)
             .setOngoing(s.phase != WorkoutPhase.COMPLETE)
+            // Spec: the one dark notification. Android colourises only foreground-service and media
+            // notifications, so on a plain ongoing one this tints the icon and actions.
+            .setColor(0xFF1F2123.toInt())
+            .setColorized(true)
 
         when (s.phase) {
             WorkoutPhase.READY -> builder
                 .setContentTitle(ex?.name ?: live.routine.name)
                 .setContentText(WorkoutFormat.setLine(live))
-                .addAction(0, if (live.isTimed) "Start" else "Done set", NotificationActionReceiver.workout(context, ACTION_WORKOUT_DONE_SET))
+                .addAction(0, if (live.isTimed) "Start set" else "Done set", NotificationActionReceiver.workout(context, ACTION_WORKOUT_DONE_SET))
             WorkoutPhase.REST -> builder
-                .setContentTitle("Rest")
-                .setContentText(live.upNext?.let { "Next: $it" } ?: "")
+                .setContentTitle("Resting")
+                .setContentText(WorkoutFormat.nextLine(live) ?: "")
                 .countdownTo(s.phaseEndsAt)
-                .addAction(0, "+30s", NotificationActionReceiver.workout(context, ACTION_WORKOUT_ADD_REST))
+                .addAction(0, "Add 30 s", NotificationActionReceiver.workout(context, ACTION_WORKOUT_ADD_REST))
                 .addAction(0, "Skip rest", NotificationActionReceiver.workout(context, ACTION_WORKOUT_SKIP_REST))
             WorkoutPhase.WORK -> builder
-                .setContentTitle(ex?.name ?: "Work")
+                .setContentTitle(ex?.name ?: "Working")
                 .setContentText(WorkoutFormat.setLine(live))
                 .countdownTo(s.phaseEndsAt)
-                .addAction(0, "Skip", NotificationActionReceiver.workout(context, ACTION_WORKOUT_SKIP_REST))
+                .addAction(0, "Done early", NotificationActionReceiver.workout(context, ACTION_WORKOUT_SKIP_REST))
             WorkoutPhase.COMPLETE -> builder
-                .setContentTitle("Workout complete")
+                .setContentTitle("Workout done")
                 .setContentText(WorkoutFormat.summary(live))
                 .setAutoCancel(true)
         }
@@ -66,10 +70,10 @@ object WorkoutNotification {
     fun alert(context: Context, live: LiveWorkout) {
         val s = live.state
         val text = when (s.phase) {
-            WorkoutPhase.READY -> "Go: ${live.exercise?.name} · set ${s.setNo}"
-            WorkoutPhase.WORK -> "Go: ${live.exercise?.name} · ${live.exercise?.durationSeconds}s"
-            WorkoutPhase.REST -> "Rest · next: ${live.upNext ?: ""}"
-            WorkoutPhase.COMPLETE -> "Workout complete · ${WorkoutFormat.summary(live)}"
+            WorkoutPhase.READY -> "Go: ${live.exercise?.name}, set ${s.setNo}"
+            WorkoutPhase.WORK -> "Go: ${live.exercise?.name}, ${live.exercise?.durationSeconds} s"
+            WorkoutPhase.REST -> "Resting. " + (WorkoutFormat.nextLine(live) ?: "")
+            WorkoutPhase.COMPLETE -> "Workout done, ${WorkoutFormat.summary(live)}"
         }
         val notification = NotificationCompat.Builder(context, Notifications.CHANNEL_WORKOUT_ALERTS)
             .setSmallIcon(R.drawable.ic_notification)

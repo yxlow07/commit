@@ -6,24 +6,26 @@ import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 
 /**
- * Text of a due-time reminder, worked out when it fires (F7.1, F7.4): early with a lead time
- * ("Due in 15 min · 14:00"), on time ("Due now · 14:00"), or late after a snooze ("Overdue · was due 14:00").
+ * Body of a due-time reminder, worked out when it fires (F7.1, F7.4; design spec "Notifications"):
+ * "Due 18:00, Study" on time, "Due 18:00, in 15 min, Study" with a lead time, and
+ * "Late, was due 18:00, Study" after a snooze.
  */
 object ReminderText {
     private const val ON_TIME_MS = 60_000L
     private val TIME = DateTimeFormatter.ofPattern("HH:mm")
     private val DAY_TIME = DateTimeFormatter.ofPattern("d MMM HH:mm")
 
-    fun label(dueAt: Long, now: Long, zone: ZoneId): String {
+    fun label(dueAt: Long, now: Long, zone: ZoneId, commitment: String? = null): String {
         val due = Instant.ofEpochMilli(dueAt).atZone(zone)
         val sameDay = due.toLocalDate() == Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
         val time = due.format(if (sameDay) TIME else DAY_TIME)
         val diff = dueAt - now
-        return when {
-            abs(diff) <= ON_TIME_MS -> "Due now · $time"
-            diff > 0 -> "Due in ${duration(diff)} · $time"
-            else -> "Overdue · was due $time"
+        val parts = when {
+            abs(diff) <= ON_TIME_MS -> listOf("Due $time")
+            diff > 0 -> listOf("Due $time", "in ${duration(diff)}")
+            else -> listOf("Late", "was due $time")
         }
+        return (parts + listOfNotNull(commitment)).joinToString(", ")
     }
 
     /** Rounded to the nearest minute: "15 min", "1 h", "1 h 30 min". */

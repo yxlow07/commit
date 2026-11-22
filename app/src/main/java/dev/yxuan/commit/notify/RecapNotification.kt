@@ -14,10 +14,16 @@ object RecapNotification {
     private const val MAX_LINES = 6
 
     fun post(context: Context, recap: Recap) {
-        val style = NotificationCompat.InboxStyle().setBigContentTitle(recap.title)
-        val lines = recap.lines
-        lines.take(MAX_LINES).forEach(style::addLine)
-        if (lines.size > MAX_LINES) style.setSummaryText("+${lines.size - MAX_LINES} more")
+        // Morning: inbox style, one line per item (F6.4). Night: a few plain sentences.
+        val style: NotificationCompat.Style = if (recap.kind == RecapKind.MORNING) {
+            NotificationCompat.InboxStyle().setBigContentTitle(recap.title).also { inbox ->
+                val lines = recap.lines
+                lines.take(MAX_LINES).forEach(inbox::addLine)
+                if (lines.size > MAX_LINES) inbox.setSummaryText("${lines.size - MAX_LINES} more")
+            }
+        } else {
+            NotificationCompat.BigTextStyle().setBigContentTitle(recap.title).bigText(recap.body)
+        }
 
         val open = PendingIntent.getActivity(
             context,
@@ -33,6 +39,7 @@ object RecapNotification {
             .setContentText(recap.summary)
             .setStyle(style)
             .setContentIntent(open)
+            .addAction(0, "Open recap", open)
             .setAutoCancel(true)
             .build()
         Notifications.post(context, id(recap.kind), notification)

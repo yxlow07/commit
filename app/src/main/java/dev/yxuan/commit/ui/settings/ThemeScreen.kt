@@ -1,8 +1,11 @@
 package dev.yxuan.commit.ui.settings
 
+import android.content.ContentResolver
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,38 +14,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AddLink
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.FileOpen
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,9 +33,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -61,21 +51,32 @@ import dev.yxuan.commit.data.db.entity.ThemeEntity
 import dev.yxuan.commit.data.repo.ThemeRepository
 import dev.yxuan.commit.domain.theme.ActiveTheme
 import dev.yxuan.commit.domain.theme.BuiltinThemes
-import dev.yxuan.commit.domain.theme.ThemeColors
-import dev.yxuan.commit.domain.theme.ThemeDefaults
 import dev.yxuan.commit.domain.theme.ThemeMode
 import dev.yxuan.commit.domain.theme.ThemeParser
-import dev.yxuan.commit.domain.theme.ThemeSpec
 import dev.yxuan.commit.ui.AppViewModelFactory
-import dev.yxuan.commit.ui.theme.CommitTheme
+import dev.yxuan.commit.ui.components.CommitDialog
+import dev.yxuan.commit.ui.components.CommitTextField
+import dev.yxuan.commit.ui.components.Glyph
+import dev.yxuan.commit.ui.components.GlyphIcon
+import dev.yxuan.commit.ui.components.PrimaryButton
+import dev.yxuan.commit.ui.components.PushedTopBar
+import dev.yxuan.commit.ui.components.ScreenTitle
+import dev.yxuan.commit.ui.components.SecondaryButton
+import dev.yxuan.commit.ui.components.TextAction
+import dev.yxuan.commit.ui.theme.Commit
+import dev.yxuan.commit.ui.theme.CommitColors
+import dev.yxuan.commit.ui.theme.Space
+import dev.yxuan.commit.ui.theme.isDark
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class ThemeViewModel(private val repo: ThemeRepository) : ViewModel() {
     val activeTheme: StateFlow<ActiveTheme> =
-        repo.observeActive().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ActiveTheme.Dynamic)
+        repo.observeActive().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ActiveTheme.Default)
 
     val importedThemes: StateFlow<List<ThemeEntity>> =
         repo.observeThemes().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -86,328 +87,180 @@ class ThemeViewModel(private val repo: ThemeRepository) : ViewModel() {
     var importing by mutableStateOf(false)
         private set
 
-    fun clearError() { error = null }
-
     fun select(id: String?) {
-        viewModelScope.launch {
-            repo.select(id)
-        }
+        error = null
+        viewModelScope.launch { repo.select(id) }
     }
 
     fun delete(id: String) {
-        viewModelScope.launch {
-            repo.delete(id)
-        }
+        viewModelScope.launch { repo.delete(id) }
     }
 
-    fun importJson(json: String) {
+    /** Reads a picked file off the main thread (capped just past the 32 KB limit) and imports it. */
+    fun importFile(resolver: ContentResolver, uri: Uri) = launchImport {
+        val text = withContext(Dispatchers.IO) {
+            resolver.openInputStream(uri)?.use { s ->
+                val buffer = java.io.ByteArrayOutputStream()
+                val chunk = ByteArray(4096)
+                while (buffer.size() <= ThemeParser.MAX_BYTES) {
+                    val n = s.read(chunk)
+                    if (n < 0) break
+                    buffer.write(chunk, 0, n)
+                }
+                buffer.toString(Charsets.UTF_8.name())
+            } ?: throw IllegalStateException("Couldn't open that file.")
+        }
+        repo.import(text)
+    }
+
+    fun importUrl(url: String) = launchImport { repo.importFromUrl(url) }
+
+    private fun launchImport(block: suspend () -> Result<*>) {
         viewModelScope.launch {
             importing = true
             error = null
-            val result = repo.import(json)
-            result.onFailure {
-                error = it.message
-            }
-            importing = false
-        }
-    }
-
-    fun importUrl(url: String) {
-        viewModelScope.launch {
-            importing = true
-            error = null
-            val result = repo.importFromUrl(url)
-            result.onFailure {
-                error = it.message
-            }
+            val result = try { block() } catch (e: Exception) { Result.failure<Unit>(e) }
+            result.onFailure { error = it.message ?: "Couldn't import that theme." }
             importing = false
         }
     }
 }
 
-/** Theme picker with previews, import from file and link (F9.3). */
-@OptIn(ExperimentalMaterial3Api::class)
+/** Themes (nav: Settings): a preview drawn in the theme, the theme list, and import (F9.3). */
 @Composable
 fun ThemeScreen(
     onBack: () -> Unit,
+    modifier: Modifier = Modifier,
     viewModel: ThemeViewModel = viewModel(factory = AppViewModelFactory),
 ) {
-    val activeTheme by viewModel.activeTheme.collectAsStateWithLifecycle()
-    val importedThemes by viewModel.importedThemes.collectAsStateWithLifecycle()
+    val active by viewModel.activeTheme.collectAsStateWithLifecycle()
+    val imported by viewModel.importedThemes.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    var showUrlDialog by remember { mutableStateOf(false) }
+    var linkDialog by remember { mutableStateOf(false) }
+    val c = Commit.colors
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let {
-            try {
-                val content = context.contentResolver.openInputStream(it)?.use { s ->
-                    s.bufferedReader().readText()
-                }
-                if (content != null) {
-                    viewModel.importJson(content)
-                }
-            } catch (e: Exception) {
-                // error will be handled
-            }
-        }
+        uri?.let { viewModel.importFile(context.contentResolver, it) }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Theme") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-            )
-        },
-    ) { padding ->
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        PushedTopBar(onBack = onBack, backLabel = "Back to Settings")
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState()),
+            Modifier.padding(start = Space.screenSide, end = Space.screenSide, top = Space.s, bottom = Space.xxxl),
+            verticalArrangement = Arrangement.spacedBy(Space.xxl),
         ) {
-            if (viewModel.importing) {
-                LinearProgressIndicator(Modifier.fillMaxWidth())
+            ScreenTitle("Themes")
+            Preview(active)
+
+            val options = BuiltinThemes.all.map { Triple(it.id, it, if (it.id == BuiltinThemes.AUTOMATIC) "Default, follows the system" else "Built in") } +
+                imported.mapNotNull { t -> ThemeParser.parseOrNull(t.json)?.let { Triple(t.id, ActiveTheme(t.id, it, ThemeMode.SYSTEM), "Imported") } }
+            Column(Modifier.selectableGroup()) {
+                options.forEach { (id, theme, source) ->
+                    ThemeRow(
+                        theme = theme,
+                        source = source,
+                        selected = active.id == id,
+                        onSelect = { viewModel.select(id) },
+                        onRemove = if (source == "Imported") ({ viewModel.delete(id) }) else null,
+                    )
+                }
             }
 
-            SectionTitle("Built-in themes")
-            ThemeCard(
-                title = "Material You",
-                subtitle = "Wallpaper colours (Android 12+)",
-                isSelected = activeTheme is ActiveTheme.Dynamic,
-                onClick = { viewModel.select(BuiltinThemes.DYNAMIC) },
-            )
-
-            ThemeCard(
-                title = "Light",
-                subtitle = "Commit palette · forced light",
-                isSelected = activeTheme.id == BuiltinThemes.LIGHT,
-                onClick = { viewModel.select(BuiltinThemes.LIGHT) },
-                previewSpec = ThemeDefaults.spec("Light"),
-                previewMode = ThemeMode.LIGHT,
-            )
-
-            ThemeCard(
-                title = "Dark",
-                subtitle = "Commit palette · forced dark",
-                isSelected = activeTheme.id == BuiltinThemes.DARK,
-                onClick = { viewModel.select(BuiltinThemes.DARK) },
-                previewSpec = ThemeDefaults.spec("Dark"),
-                previewMode = ThemeMode.DARK,
-            )
-
-            HorizontalDivider(Modifier.padding(vertical = 12.dp))
-
-            SectionTitle("Imported themes")
-            if (importedThemes.isEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                    PrimaryButton("Import file", onClick = { filePicker.launch("application/json") }, enabled = !viewModel.importing)
+                    SecondaryButton("Import from link", onClick = { linkDialog = true }, enabled = !viewModel.importing)
+                }
                 Text(
-                    "No imported themes yet. Import from a JSON file or link below.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    "A theme is a JSON file of colours and corner rounding. Missing values fall back to Light.",
+                    style = Commit.type.meta,
+                    color = c.muted,
                 )
-            } else {
-                importedThemes.forEach { entity ->
-                    val spec = remember(entity.json) { ThemeParser.parseOrNull(entity.json) }
-                    ThemeCard(
-                        title = entity.name,
-                        subtitle = spec?.let { "${it.font.key.replaceFirstChar { c -> c.uppercase() }} · ${it.cornerRadius.toInt()} dp" } ?: "Invalid",
-                        isSelected = activeTheme.id == entity.id,
-                        onClick = { viewModel.select(entity.id) },
-                        onDelete = { viewModel.delete(entity.id) },
-                        previewSpec = spec,
-                        previewMode = ThemeMode.SYSTEM,
-                    )
-                }
+                viewModel.error?.let { Text(it, style = Commit.type.meta, color = c.danger) }
             }
-
-            Spacer(Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                OutlinedButton(
-                    onClick = { filePicker.launch("application/json") },
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Icon(Icons.Default.FileOpen, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Import file")
-                }
-                Button(
-                    onClick = { showUrlDialog = true },
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Icon(Icons.Default.AddLink, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Import link")
-                }
-            }
-
-            Spacer(Modifier.height(24.dp))
         }
     }
 
-    if (showUrlDialog) {
-        var url by remember { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { showUrlDialog = false },
-            title = { Text("Import theme from link") },
-            text = {
-                Column {
-                    Text(
-                        "Paste a link to a theme JSON file (https://):",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = url,
-                        onValueChange = { url = it },
-                        placeholder = { Text("https://example.com/theme.json") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
+    if (linkDialog) {
+        var url by remember { mutableStateOf("https://") }
+        CommitDialog(
+            title = "Import from link",
+            onDismiss = { linkDialog = false },
+            actions = {
+                TextAction("Cancel", onClick = { linkDialog = false })
+                PrimaryButton("Import", enabled = url.length > "https://".length, onClick = {
+                    viewModel.importUrl(url)
+                    linkDialog = false
+                })
             },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showUrlDialog = false
-                        viewModel.importUrl(url)
-                    },
-                    enabled = url.isNotBlank(),
-                ) {
-                    Text("Import")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showUrlDialog = false }) {
-                    Text("Cancel")
-                }
-            },
-        )
-    }
-
-    viewModel.error?.let { err ->
-        AlertDialog(
-            onDismissRequest = { viewModel.clearError() },
-            title = { Text("Theme import failed") },
-            text = { Text(err) },
-            confirmButton = {
-                TextButton(onClick = { viewModel.clearError() }) {
-                    Text("OK")
-                }
-            },
-        )
-    }
-}
-
-@Composable
-private fun ThemeCard(
-    title: String,
-    subtitle: String,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    onDelete: (() -> Unit)? = null,
-    previewSpec: ThemeSpec? = null,
-    previewMode: ThemeMode = ThemeMode.SYSTEM,
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
-            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        ),
-    ) {
-        Column(Modifier.padding(14.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                RadioButton(
-                    selected = isSelected,
-                    onClick = onClick,
-                )
-                Spacer(Modifier.width(8.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(title, style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                if (onDelete != null) {
-                    IconButton(onClick = onDelete) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete theme", tint = MaterialTheme.colorScheme.error)
-                    }
-                }
-            }
-
-            if (previewSpec != null) {
-                Spacer(Modifier.height(8.dp))
-                ThemeMiniPreview(spec = previewSpec, mode = previewMode)
-            }
-        }
-    }
-}
-
-@Composable
-private fun ThemeMiniPreview(spec: ThemeSpec, mode: ThemeMode) {
-    CommitTheme(active = ActiveTheme.Fixed(spec.name, spec, mode)) {
-        Surface(
-            shape = MaterialTheme.shapes.medium,
-            color = MaterialTheme.colorScheme.surface,
-            modifier = Modifier.fillMaxWidth(),
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                // Color swatches
-                ColorSwatch(Color(spec.light.primary))
-                ColorSwatch(Color(spec.light.secondary))
-                ColorSwatch(Color(spec.light.surfaceVariant))
+            CommitTextField(url, { url = it.trim() }, label = "Link to a theme file", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri))
+        }
+    }
+}
 
-                Spacer(Modifier.weight(1f))
-
-                // Interactive elements sample
-                Button(
-                    onClick = {},
-                    modifier = Modifier.height(28.dp),
-                    shape = MaterialTheme.shapes.small,
-                ) {
-                    Text("Button", style = MaterialTheme.typography.labelSmall)
-                }
-
-                Checkbox(
-                    checked = true,
-                    onCheckedChange = null,
-                    modifier = Modifier.size(24.dp),
-                )
+/** The widget drawn small on the theme's wallpaper colour, in that theme's colours and radius. */
+@Composable
+private fun Preview(theme: ActiveTheme) {
+    val dark = theme.isDark()
+    val t = CommitColors.from(if (dark) theme.spec.dark else theme.spec.light, dark)
+    val wall = lerp(t.surface, t.ink, 0.15f)
+    val radius = (theme.spec.cornerRadius * 0.7f).dp
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(Commit.shapes.preview))
+            .background(wall)
+            .padding(20.dp)
+            .semantics(mergeDescendants = true) { contentDescription = "Preview of ${theme.spec.name}" },
+    ) {
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(radius)).background(t.surface).padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Bottom) {
+                Text("Study", style = Commit.type.tabSelected.copy(fontSize = 22.sp), color = t.ink)
+                Text("Work", style = Commit.type.label.copy(fontSize = 13.sp), color = t.muted, modifier = Modifier.padding(bottom = 2.dp))
+                Text("Home", style = Commit.type.label.copy(fontSize = 13.sp), color = t.muted, modifier = Modifier.padding(bottom = 2.dp))
             }
+            PreviewRow("18:00", "Read chapter 4", t, late = false)
+            PreviewRow("Late", "Data Structures lab 5", t, late = true)
         }
     }
 }
 
 @Composable
-private fun ColorSwatch(color: Color) {
-    Surface(
-        shape = CircleShape,
-        color = color,
-        modifier = Modifier.size(16.dp),
-    ) {}
+private fun PreviewRow(due: String, title: String, t: CommitColors, late: Boolean) {
+    Row(Modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(due, style = Commit.type.caption.copy(fontWeight = FontWeight.Normal), color = if (late) t.danger else t.muted, modifier = Modifier.width(44.dp))
+        Text(title, style = Commit.type.meta, color = t.ink, modifier = Modifier.weight(1f), maxLines = 1)
+        Box(Modifier.size(16.dp).border(1.5.dp, t.ink, CircleShape))
+    }
+}
+
+/** 28 dp swatch (surface with a dot of the text colour), name, source; tick when selected. */
+@Composable
+private fun ThemeRow(theme: ActiveTheme, source: String, selected: Boolean, onSelect: () -> Unit, onRemove: (() -> Unit)?) {
+    val c = Commit.colors
+    val dark = theme.isDark()
+    val t = if (dark) theme.spec.dark else theme.spec.light
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = Space.rowApp).selectable(selected = selected, role = Role.RadioButton, onClick = onSelect),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Box(
+            Modifier.size(28.dp).clip(CircleShape).background(androidx.compose.ui.graphics.Color(t.surface)).border(1.dp, c.track, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(Modifier.size(10.dp).clip(CircleShape).background(androidx.compose.ui.graphics.Color(t.ink)))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(theme.spec.name, style = Commit.type.body.copy(fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal), color = c.ink)
+            Text(source, style = Commit.type.meta, color = c.muted)
+        }
+        if (onRemove != null && !selected) TextAction("Remove", onClick = onRemove, muted = true)
+        if (selected) GlyphIcon(Glyph.Tick, c.ink, size = 18.dp, stroke = 2.2.dp)
+        Spacer(Modifier.width(0.dp))
+    }
 }

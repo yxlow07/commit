@@ -105,7 +105,7 @@ class ThemeRepository(
     }
 
     suspend fun select(id: String?) {
-        val targetId = if (id == BuiltinThemes.DYNAMIC) null else id
+        val targetId = if (id == BuiltinThemes.AUTOMATIC || id == BuiltinThemes.LEGACY_DYNAMIC) null else id
         settingsRepository.update { it.copy(activeThemeId = targetId) }
     }
 
