@@ -33,7 +33,11 @@ private const val SESSION_SUMMARY_SELECT =
 
 @Dao
 interface RoutineDao {
-    @Query("SELECT * FROM routines WHERE deleted = 0 ORDER BY sort_order, name")
+    /** Routines of active commitments (archived or deleted commitments' routines are left out). */
+    @Query(
+        "SELECT r.* FROM routines r JOIN commitments c ON c.id = r.commitment_id " +
+            "WHERE r.deleted = 0 AND c.deleted = 0 AND c.archived = 0 ORDER BY r.sort_order, r.name"
+    )
     suspend fun getAll(): List<RoutineEntity>
 
     @Upsert
@@ -44,7 +48,8 @@ interface RoutineDao {
 
     @Query(
         "SELECT r.*, (SELECT COUNT(*) FROM exercises e WHERE e.routine_id = r.id AND e.deleted = 0) AS exerciseCount " +
-            "FROM routines r WHERE r.deleted = 0 ORDER BY r.sort_order, r.name"
+            "FROM routines r JOIN commitments c ON c.id = r.commitment_id " +
+            "WHERE r.deleted = 0 AND c.deleted = 0 AND c.archived = 0 ORDER BY r.sort_order, r.name"
     )
     fun observeSummaries(): Flow<List<RoutineSummary>>
 
