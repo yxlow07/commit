@@ -11,11 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,9 +26,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.window.DialogProperties
 import dev.yxuan.commit.ui.theme.Commit
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneOffset
 
 /** Dialog panel: `surface`, the theme's panel radius, 20 dp sides, 24 dp top, 20 dp between groups. */
 @Composable
@@ -77,27 +70,5 @@ fun DialogPanel(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
             actions()
         }
-    }
-}
-
-/** System-style date picker (Material, themed by the tokens). */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun DatePickerSheet(initial: LocalDate?, onPick: (LocalDate) -> Unit, onDismiss: () -> Unit) {
-    // DatePicker works in UTC-midnight millis.
-    val state = rememberDatePickerState(
-        initialSelectedDateMillis = (initial ?: LocalDate.now()).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-    )
-    DatePickerDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextAction("OK", onClick = {
-                state.selectedDateMillis?.let { onPick(Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()) }
-                onDismiss()
-            })
-        },
-        dismissButton = { TextAction("Cancel", onClick = onDismiss, muted = true) },
-    ) {
-        DatePicker(state = state)
     }
 }

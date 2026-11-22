@@ -30,6 +30,7 @@ import dev.yxuan.commit.appContainer
 import dev.yxuan.commit.data.db.entity.CommitmentType
 import dev.yxuan.commit.data.repo.Due
 import dev.yxuan.commit.domain.theme.ActiveTheme
+import dev.yxuan.commit.ui.components.DeleteIconButton
 import dev.yxuan.commit.ui.components.DialogPanel
 import dev.yxuan.commit.ui.components.PrimaryButton
 import dev.yxuan.commit.ui.components.TextAction
@@ -205,7 +206,7 @@ private fun QuickAddDialog(
             title = title,
             actions = {
                 if (onDelete != null) {
-                    TextAction("Delete todo", onClick = onDelete, muted = true)
+                    DeleteIconButton(onClick = onDelete, contentDescription = "Delete todo")
                     Spacer(Modifier.weight(1f))
                 }
                 TextAction("Cancel", onClick = onDismiss)

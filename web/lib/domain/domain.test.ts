@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { localDate } from "./dates";
 import { formatDue } from "./due";
-import { effectiveDue, isDone, isRecurring, nextDueDay, nextMatchingDay, openItems, recurrenceLabel } from "./recurrence";
+import { effectiveDue, intervalLabel, isDone, isRecurring, nextDueDay, nextMatchingDay, openItems, recurrenceLabel } from "./recurrence";
 import { commitmentStats, lateness, perDay, progress, type CompletionRow, type ExercisePoint } from "./stats";
 import { cssColor, formatVolume, formatWeight, hasWeekday, toggleWeekday, weekdayBit, weekdaysLabel } from "./format";
 import type { Todo } from "./types";
@@ -111,6 +111,13 @@ describe("recurrence (RecurrenceTest)", () => {
     expect(isDone(mon, at(2026, 11, 26, 10))).toBe(false);
     // No due date -> today's or the next matching day.
     expect(nextDueDay(chore(null, { recur_days: mwf }), at(2026, 11, 24, 10))).toBe(at(2026, 11, 25));
+  });
+  it("interval labels use the largest exact unit", () => {
+    expect(intervalLabel(1)).toBe("every day");
+    expect(intervalLabel(4)).toBe("every 4 days");
+    expect(intervalLabel(14)).toBe("every 2 weeks");
+    expect(intervalLabel(30)).toBe("every month");
+    expect(intervalLabel(730)).toBe("every 2 years");
   });
   it("recurrence label supports interval and calendar", () => {
     expect(recurrenceLabel(chore(3))).toBe("every 3 days");

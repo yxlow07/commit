@@ -122,6 +122,7 @@ Recurring chores use the same rules for their next due date.
 | Primary round | 44–48 dp `ink` square with 12 dp corners, 18–20 dp plus icon in `onInk` | Add todo in the widget and on Today |
 | Secondary | `fill` background, `ink` text | Add 30 s, Import from link |
 | Text | No background, `ink` Bold (or `muted` Medium for low-priority actions) | Cancel, Edit, Open recap, No date |
+| Delete icon | 44 dp `fill` square (button radius) with a `muted` trash glyph | Delete todo (popup and editor) |
 
 ### Stepper (reps and weight)
 
@@ -266,8 +267,8 @@ A translucent activity themed as a dialog, opened by the widget's add button and
 - Surface `surface`, radius 28, 20 dp side padding, 24 dp top, 20 dp gap between groups. Scrim `scrim`.
 - Title field gets focus on open. Save is disabled until the title has a character.
 - Commitment defaults to the tab the widget was showing. Gym is not offered (workouts are planned in the app).
-- Due: tapping the date opens the system date picker, tapping the time opens the time picker: hour and minute scroll wheels under one band (24-hour). The date and time boxes centre their text; the time button reads "Add time" in `muted` until set. "No date" clears both.
-- Repeat: a labelled field like the others. A checkbox with a summary ("Repeat every **4** days after I finish it", "Repeat on **Mon, Thu**"; before picking, a bold `muted` x), which also ticks it. Once ticked: in the editor the mode as a segmented control ("After I finish it" / "On weekdays"), then that mode's picker: a centred 3-row scroll wheel of days (1–365, starting at 1), or seven weekday toggle buttons (selected `ink` / `onInk`, others `fill`).
+- Due: tapping the date opens the date picker (day, month and year wheels under one band, the full date above, and "Today"), tapping the time opens the time picker: hour and minute wheels under one band (24-hour). The date and time boxes centre their text; the time button reads "Add time" in `muted` until set. "No date" clears both.
+- Repeat: a labelled field like the others. A checkbox with a summary ("Repeat every **4** days after I finish it", "Repeat on **Mon, Thu**"; before picking, a bold `muted` x), which also ticks it. Once ticked: in the editor the mode as a segmented control ("After I finish it" / "On weekdays"), then that mode's picker: a number wheel and a unit wheel (days, weeks, months, years; stored as days, a month being 30 and a year 365) under one band, starting at 1 day, or seven weekday toggle buttons (selected `ink` / `onInk`, others `fill`).
 - Save closes the popup, writes to Room, and the widget redraws with the new row. Cancel or tapping the scrim closes without saving. Back does the same.
 
 ## App screens

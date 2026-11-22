@@ -22,8 +22,15 @@ export function weekdaysLabel(mask: number): string {
 }
 
 /** "every day" / "every 4 days". */
+/** Units the phone's wheel uses (stored as days: week 7, month 30, year 365); the largest exact one wins. */
+const INTERVAL_UNITS: [number, string, string][] = [[365, "year", "years"], [30, "month", "months"], [7, "week", "weeks"], [1, "day", "days"]];
+
+/** "every day", "every 4 days", "every 2 weeks", "every month". */
 export function intervalLabel(days: number): string {
-  return days === 1 ? "every day" : `every ${days} days`;
+  const d = Math.max(1, days);
+  const [size, one, many] = INTERVAL_UNITS.find(([u]) => d % u === 0)!;
+  const n = d / size;
+  return n === 1 ? `every ${one}` : `every ${n} ${many}`;
 }
 
 /** User-facing label for recurring chores. */

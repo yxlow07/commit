@@ -22,6 +22,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -45,6 +46,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import dev.yxuan.commit.data.db.entity.CommitmentEntity
 import dev.yxuan.commit.data.repo.Due
+import dev.yxuan.commit.domain.IntervalUnit
 import dev.yxuan.commit.domain.Weekdays
 import dev.yxuan.commit.ui.components.CommitCheckbox
 import dev.yxuan.commit.ui.components.CommitTextField
@@ -214,9 +216,14 @@ private fun RepeatField(
                     withStyle(bold) { append(Weekdays.label(recurDays ?: 0)) }
                 } else {
                     append("Repeat every ")
-                    val number = if (repeating) days.toString() else picked?.toString() ?: "x"
-                    withStyle(bold) { append(number) }
-                    append(if (number == "1") " day after I finish it" else " days after I finish it")
+                    val p = picked
+                    if (!repeating && p == null) {
+                        withStyle(bold) { append("x") }
+                        append(" days after I finish it")
+                    } else {
+                        withStyle(bold) { append(IntervalUnit.describe(if (repeating) days else p!!)) }
+                        append(" after I finish it")
+                    }
                 }
             }
             Text(
@@ -246,21 +253,37 @@ private fun RepeatField(
                 if (weekdays) {
                     WeekdayToggles(recurDays ?: 0, { onRecurDaysChange(it) }, keepOne = true)
                 } else {
-                    // Centred, with one selection band behind the number and its unit, as on iOS.
+                    // Number and unit wheels under one band, as on iOS. Stored as days (IntervalUnit).
+                    val (n, unit) = IntervalUnit.split(days)
+                    val numbers = if (unit == IntervalUnit.DAY) DAY_NUMBERS else UNIT_NUMBERS
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        Box(Modifier.width(160.dp).height(36.dp).background(c.fill, RoundedCornerShape(10.dp)))
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Box(Modifier.width(200.dp).height(36.dp).background(c.fill, RoundedCornerShape(10.dp)))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            key(unit) {
+                                WheelPicker(
+                                    values = numbers,
+                                    value = n.coerceIn(numbers.first(), numbers.last()),
+                                    onValueChange = { v -> (v * unit.days).let { picked = it; onRepeatChange(it) } },
+                                    label = { it.toString() },
+                                    contentDescription = "Repeat every",
+                                    visibleRows = 3,
+                                    showBand = false,
+                                )
+                            }
                             WheelPicker(
-                                values = REPEAT_DAY_RANGE,
-                                value = days,
-                                onValueChange = { picked = it; onRepeatChange(it) },
-                                label = { it.toString() },
-                                contentDescription = "Days between repeats",
-                                visibleRows = 3, // 5 rows left an empty gap above small values
+                                values = IntervalUnit.entries.map { it.ordinal },
+                                value = unit.ordinal,
+                                onValueChange = { i ->
+                                    val u = IntervalUnit.entries[i]
+                                    val keep = n.coerceAtMost(if (u == IntervalUnit.DAY) DAY_NUMBERS.last() else UNIT_NUMBERS.last())
+                                    (keep * u.days).let { picked = it; onRepeatChange(it) }
+                                },
+                                label = { IntervalUnit.entries[it].word(n) },
+                                contentDescription = "Unit",
+                                visibleRows = 3,
                                 showBand = false,
+                                width = 104.dp,
                             )
-                            // Fixed width, so the number stays centred in the band as "day" / "days" changes.
-                            Text(if (days == 1) "day" else "days", style = Commit.type.body, color = c.ink, modifier = Modifier.width(44.dp))
                         }
                     }
                 }
@@ -269,5 +292,6 @@ private fun RepeatField(
     }
 }
 
-/** Every day up to a year. */
-private val REPEAT_DAY_RANGE = (1..365).toList()
+/** Numbers on the repeat wheel: up to a year of days, 99 of the larger units. */
+private val DAY_NUMBERS = (1..365).toList()
+private val UNIT_NUMBERS = (1..99).toList()

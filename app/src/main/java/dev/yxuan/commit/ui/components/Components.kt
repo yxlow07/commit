@@ -71,7 +71,7 @@ import dev.yxuan.commit.ui.theme.tnum
 
 // ---- Icons (thin strokes, drawn so they follow the tokens) ----
 
-enum class Glyph { Back, Chevron, Plus, Minus, Tick, Close }
+enum class Glyph { Back, Chevron, Plus, Minus, Tick, Close, Trash }
 
 @Composable
 fun GlyphIcon(glyph: Glyph, color: Color, size: Dp = 20.dp, stroke: Dp = 1.8.dp, modifier: Modifier = Modifier) {
@@ -90,6 +90,13 @@ fun GlyphIcon(glyph: Glyph, color: Color, size: Dp = 20.dp, stroke: Dp = 1.8.dp,
             }
             Glyph.Minus -> drawLine(color, Offset(5 * w / 24, w / 2), Offset(19 * w / 24, w / 2), s.width, StrokeCap.Round)
             Glyph.Tick -> drawPath(p(5f to 12.5f, 9.5f to 17f, 19f to 7f), color, style = s)
+            Glyph.Trash -> {
+                drawLine(color, Offset(4 * w / 24, 6.5f * w / 24), Offset(20 * w / 24, 6.5f * w / 24), s.width, StrokeCap.Round)
+                drawPath(p(9f to 6.5f, 9.5f to 4f, 14.5f to 4f, 15f to 6.5f), color, style = s)
+                drawPath(p(6f to 6.5f, 7f to 20f, 17f to 20f, 18f to 6.5f), color, style = s)
+                drawLine(color, Offset(10 * w / 24, 10 * w / 24), Offset(10 * w / 24, 16.5f * w / 24), s.width, StrokeCap.Round)
+                drawLine(color, Offset(14 * w / 24, 10 * w / 24), Offset(14 * w / 24, 16.5f * w / 24), s.width, StrokeCap.Round)
+            }
             Glyph.Close -> {
                 drawLine(color, Offset(6 * w / 24, 6 * w / 24), Offset(18 * w / 24, 18 * w / 24), s.width, StrokeCap.Round)
                 drawLine(color, Offset(18 * w / 24, 6 * w / 24), Offset(6 * w / 24, 18 * w / 24), s.width, StrokeCap.Round)
@@ -244,6 +251,23 @@ fun PrimaryRoundButton(onClick: () -> Unit, contentDescription: String, modifier
         contentAlignment = Alignment.Center,
     ) {
         GlyphIcon(Glyph.Plus, c.onInk, size = if (size >= 48.dp) 20.dp else 18.dp, stroke = 2.dp)
+    }
+}
+
+/** Delete as an icon: a trash glyph on a light `fill` square (button radius), 44 dp. */
+@Composable
+fun DeleteIconButton(onClick: () -> Unit, contentDescription: String, modifier: Modifier = Modifier) {
+    val c = Commit.colors
+    Box(
+        modifier
+            .size(Space.touch)
+            .clip(RoundedCornerShape(Commit.shapes.button))
+            .background(c.fill)
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { this.contentDescription = contentDescription },
+        contentAlignment = Alignment.Center,
+    ) {
+        GlyphIcon(Glyph.Trash, c.muted, size = 20.dp, stroke = 1.6.dp)
     }
 }
 

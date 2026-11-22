@@ -21,6 +21,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.yxuan.commit.ui.AppViewModelFactory
+import dev.yxuan.commit.ui.components.DeleteIconButton
 import dev.yxuan.commit.ui.components.PrimaryButton
 import dev.yxuan.commit.ui.components.PushedTopBar
 import dev.yxuan.commit.ui.components.ScreenTitle
@@ -42,7 +43,7 @@ fun TodoEditorScreen(
 
     Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
         PushedTopBar(onBack = onDone) {
-            if (!viewModel.isNew) TextAction("Delete todo", onClick = viewModel::delete, muted = true)
+            if (!viewModel.isNew) DeleteIconButton(onClick = viewModel::delete, contentDescription = "Delete todo")
         }
         if (!state.loaded) return@Column
         Column(

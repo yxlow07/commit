@@ -634,3 +634,9 @@ Changed (2026-11-22), todo editing:
 - **Dialogs dim what's behind** even when opened from the popup (whose window has dimming off), so the time dialog no longer blends into it.
 - **Centred box contents:** date and time boxes, number-only fields (routine editor, session edit).
 Checked on the emulator in the widget's edit popup (weekday mode, interval mode, time picker).
+
+Changed (2026-11-22), todo editing:
+- **Date picker** is now wheels like the time picker: day (follows the month's length), month, year, under one band, with the full date above and "Today" (`DateWheels`, `DatePickerSheet`).
+- **"After I finish it" units:** a number wheel and a days / weeks / months / years wheel. Still stored as `recur_interval_days` (week 7, month 30, year 365), so sync and the web app are unchanged; labels show the largest exact unit ("Every 2 weeks") on the phone and the web (`IntervalUnit`, `IntervalUnitTest`; web `intervalLabel` + test). Months and years are approximate (30 / 365 days after finishing).
+- **Delete todo** is a trash icon on a light grey square, in the popup and the editor.
+Checked on the emulator: date wheels (Thursday 19 November 2026), unit wheel to "2 weeks" with the summary following, delete icon. Unit tests 66 of 66; web 39 of 39.
