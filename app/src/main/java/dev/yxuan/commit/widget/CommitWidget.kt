@@ -24,7 +24,6 @@ import androidx.glance.action.actionParametersOf
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
-import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.appWidgetBackground
@@ -75,15 +74,11 @@ val TodoIdParam = ActionParameters.Key<String>("todo_id")
 val CommitmentIdParam = ActionParameters.Key<String>("commitment_id")
 val DoneParam = ActionParameters.Key<Boolean>("done")
 val RowParam = ActionParameters.Key<Int>("row")
-val AppWidgetIdParam = ActionParameters.Key<Int>("app_widget_id")
 val NewCommitmentParam = ActionParameters.Key<Boolean>(MainActivity.EXTRA_NEW_COMMITMENT)
 val OpenWorkoutsParam = ActionParameters.Key<Boolean>(MainActivity.EXTRA_OPEN_WORKOUTS)
 
 private val MEDIUM = DpSize(250.dp, 180.dp)
 private val LARGE = DpSize(250.dp, 250.dp)
-
-/** Tab slots before the last one becomes "More". */
-private const val MAX_TABS = 5
 
 /**
  * Home-screen widget (F3, design spec "Widget"): commitment tabs, the selected commitment's todos
@@ -101,7 +96,6 @@ class CommitWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val container = context.appContainer
         val clock = container.clock
-        val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
         val tabsFlow = container.commitmentRepository.observeWidgetTabs()
         // One-off todos finished in the last day are included so a just-ticked row can stay visible.
         val todosFlow = container.todoRepository.observeForWidget(clock.millis() - 24 * 60 * 60 * 1000L)
@@ -140,7 +134,7 @@ class CommitWidget : GlanceAppWidget() {
                         NoCommitments()
                         return@Column
                     }
-                    TabRow(tabs, selected, appWidgetId)
+                    TabRow(tabs, selected)
                     if (selected.type == CommitmentType.WORKOUT) {
                         Spacer(GlanceModifier.height(10.dp))
                         WorkoutPanel(routines.filter { it.routine.commitmentId == selected.id }, live)
@@ -170,72 +164,94 @@ internal fun withTickedRows(items: List<TodoItem>, ticked: Map<String, Int>): Li
 
 // ---- Tabs ----
 
-/** Rough text width for fitting tabs (Glance can't measure). */
-private fun textWidth(text: String, size: TextUnit) = (text.length * size.value * 0.56f).dp
+/**
+ * Rough text width for fitting tabs (Glance can't measure). Measured on the emulator: about 0.5 em
+ * per character for the large light tab, 0.47 em for the 15 sp medium ones.
+ */
+private fun textWidth(text: String, size: TextUnit) = (text.length * size.value * if (size.value >= 20f) 0.5f else 0.47f).dp
+
+/** A tab in the visible window; [partial] tabs are cut off at the right edge to show there's more. */
+internal data class TabSlot(val index: Int, val partial: Boolean = false, val width: Float = 0f)
+
+/**
+ * Which tabs the row shows, as if it were a scrolled strip (widgets can't scroll sideways). The
+ * window starts one tab before the selected one, so you can always step back; near the end it slides
+ * left to stay full. After the tabs that fit, the next one is shown cut off when at least
+ * [minPartial] is left. [widths] are each tab's full width at its style, in dp.
+ */
+internal fun tabWindow(widths: List<Float>, selected: Int, available: Float, gap: Float, minPartial: Float = 36f): List<TabSlot> {
+    if (widths.isEmpty()) return emptyList()
+    fun fitFrom(start: Int): Int { // index after the last tab that fits fully
+        var used = 0f
+        var i = start
+        while (i < widths.size) {
+            val add = widths[i] + if (i > start) gap else 0f
+            if (used + add > available && i > start) break
+            used += add
+            i++
+        }
+        return i
+    }
+    var start = (selected - 1).coerceAtLeast(0)
+    // The selected tab must fit fully; drop the tab before it if not.
+    if (fitFrom(start) <= selected) start = selected
+    // Scrolled to the end: slide left while a whole earlier tab still fits.
+    if (fitFrom(start) == widths.size) {
+        while (start > 0 && fitFrom(start - 1) == widths.size) start--
+    }
+    val end = fitFrom(start)
+    val slots = (start until end).map { TabSlot(it) }.toMutableList()
+    if (end < widths.size) {
+        val used = (start until end).sumOf { widths[it].toDouble() }.toFloat() + gap * (end - start)
+        val left = available - used
+        when {
+            left >= minPartial -> slots += TabSlot(end, partial = true, width = left)
+            // No room for the next one: cut the last tab instead (never the selected one), so the
+            // row still shows there's more.
+            slots.size > 1 && slots.last().index != selected -> {
+                val last = slots.removeAt(slots.lastIndex)
+                slots += TabSlot(last.index, partial = true, width = widths[last.index] + left - 1f)
+            }
+        }
+    }
+    return slots
+}
 
 /**
  * One row of names: selected 30 sp light `ink`, others 15 sp medium `muted`, bottoms aligned (small
- * tabs get 4 dp so their baselines meet). Up to 5 slots; with more, the 5th becomes "More". On a
- * narrow widget the selected tab drops to 24 sp before tabs are hidden.
+ * tabs get 4 dp so their baselines meet). It behaves like a scrolled strip ([tabWindow]): tapping a
+ * tab further along selects it and the row slides to it. On a narrow widget the selected tab drops
+ * to 24 sp.
  */
 @Composable
-private fun TabRow(tabs: List<CommitmentEntity>, selected: CommitmentEntity, appWidgetId: Int) {
+private fun TabRow(tabs: List<CommitmentEntity>, selected: CommitmentEntity) {
     val c = LocalWidgetColors.current
-    val available = LocalSize.current.width - 36.dp
-    fun fits(list: List<String>, selectedSize: TextUnit): Boolean {
-        val total = list.sumOf { name -> (if (name == selected.name) textWidth(name, selectedSize) else textWidth(name, 15.sp)).value.toDouble() } +
-            (list.size - 1) * 14.0
-        return total <= available.value
-    }
-    var count = minOf(tabs.size, MAX_TABS)
-    var bigSize = 30.sp
-    var shown: List<CommitmentEntity>
-    var more: Boolean
-    while (true) {
-        more = tabs.size > count
-        shown = visibleTabs(tabs, selected, if (more) count - 1 else count)
-        val names = shown.map { it.name } + if (more) listOf("More") else emptyList()
-        if (fits(names, 30.sp)) { bigSize = 30.sp; break }
-        if (fits(names, 24.sp)) { bigSize = 24.sp; break }
-        if (count <= 2) { bigSize = 24.sp; break }
-        count--
-    }
+    val available = (LocalSize.current.width - 36.dp).value
+    val selectedIndex = tabs.indexOf(selected).coerceAtLeast(0)
+    val bigSize = if (textWidth(selected.name, 30.sp).value > available * 0.6f) 24.sp else 30.sp
+    val widths = tabs.mapIndexed { i, t -> textWidth(t.name, if (i == selectedIndex) bigSize else 15.sp).value }
+    val slots = tabWindow(widths, selectedIndex, available, gap = 14f)
 
     // 12 dp above and below for a 44 dp hit area; a short widget showing a workout needs the room.
     val tabPad = if (selected.type == CommitmentType.WORKOUT && LocalSize.current.height < COMPACT_WORKOUT_HEIGHT) 4.dp else 12.dp
     Row(GlanceModifier.fillMaxWidth().padding(end = 10.dp), verticalAlignment = Alignment.Bottom) {
-        shown.forEachIndexed { i, tab ->
-            if (i > 0) Spacer(GlanceModifier.width(14.dp))
-            val on = tab.id == selected.id
+        slots.forEachIndexed { n, slot ->
+            if (n > 0) Spacer(GlanceModifier.width(14.dp))
+            val tab = tabs[slot.index]
+            val on = slot.index == selectedIndex
             Text(
                 tab.name,
                 maxLines = 1,
                 style = if (on) TextStyle(color = c.ink, fontSize = bigSize, fontFamily = WidgetLight)
                 else TextStyle(color = c.muted, fontSize = 15.sp, fontWeight = FontWeight.Medium),
                 modifier = GlanceModifier
+                    .let { if (slot.partial) it.width(slot.width.dp) else it }
                     .padding(top = tabPad, bottom = if (on) tabPad else tabPad + 4.dp)
                     .clickable(actionRunCallback<SelectTabAction>(actionParametersOf(CommitmentIdParam to tab.id)))
                     .semantics { contentDescription = tab.name + if (on) ", selected tab" else ", tab" },
             )
         }
-        if (more) {
-            Spacer(GlanceModifier.width(14.dp))
-            Text(
-                "More",
-                style = TextStyle(color = c.muted, fontSize = 15.sp, fontWeight = FontWeight.Medium),
-                modifier = GlanceModifier.padding(top = tabPad, bottom = tabPad + 4.dp)
-                    .clickable(actionStartActivity<WidgetTabPickerActivity>(actionParametersOf(AppWidgetIdParam to appWidgetId)))
-                    .semantics { contentDescription = "More commitments" },
-            )
-        }
     }
-}
-
-/** First [max] tabs, but always including the selected one. */
-internal fun <T> visibleTabs(tabs: List<T>, selected: T, max: Int): List<T> {
-    if (tabs.size <= max) return tabs
-    val head = tabs.take(max.coerceAtLeast(1))
-    return if (selected in head) head else head.dropLast(1) + selected
 }
 
 // ---- Todos ----

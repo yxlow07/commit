@@ -109,7 +109,7 @@ Recurring chores use the same rules for their next due date.
 
 ### Commitment tabs (widget)
 
-- One horizontal row of names, scrollable sideways when it overflows. Gap 14 dp.
+- One horizontal row of names that slides with the selection when it overflows (see Platform limits). Gap 14 dp.
 - Selected: `tab.selected` (30 / Light, `ink`). Others: `label` (15 / Medium, `muted`). All sit on one text baseline.
 - Each tab has 12 dp padding above and below so the hit area is at least 44 dp.
 - Tapping a tab swaps the list in place. The selected tab scrolls fully into view.
@@ -208,7 +208,7 @@ These change the design on the widget only. The app follows the tokens exactly.
 - **No custom fonts.** Widgets render text with system fonts, so the widget uses the device's default sans-serif. Hanken Grotesk is app-only.
 - **No Light weight.** Glance offers Normal, Medium and Bold. Set the selected tab and the rest timer in Normal at the specified size. If the large numbers look too heavy on device, render them as a bitmap (`ImageProvider`) instead, but only for the rest timer.
 - **No baseline alignment.** Put the tabs in a `Row` with bottom alignment and add about 4 dp bottom padding to the small tabs so their baselines meet the large one. Check on a real device.
-- **No sideways scrolling.** Glance has no horizontal lazy list. Fit up to 5 tabs. With more commitments, the 5th slot becomes "More", which opens a small picker popup. If the widget is narrow, drop the selected tab size from 30 to 24 sp before hiding tabs.
+- **No sideways scrolling.** Widgets (RemoteViews) have no horizontal scroll view and can't detect swipes. The tab row behaves like a scrolled strip instead: it starts one tab before the selected one, slides left to stay full near the end, and the next tab is shown cut off ("Sch…") when more exist. Tapping a tab further along selects it and the row slides to it. If the selected name is very long, its size drops from 30 to 24 sp.
 - **Checkbox look.** Glance's `CheckBox` cannot be styled as a thin circle. Use a 44 dp clickable `Box` holding one of two vector drawables (empty circle, filled circle with tick), with `actionRunCallback` and a content description.
 - **Live countdown.** Use a `Chronometer` through `AndroidRemoteViews` set to count down to `rest_ends_at`. The widget itself never redraws every second.
 
@@ -264,7 +264,7 @@ A translucent activity themed as a dialog, opened by the widget's add button and
 - Title field gets focus on open. Save is disabled until the title has a character.
 - Commitment defaults to the tab the widget was showing. Gym is not offered (workouts are planned in the app).
 - Due: tapping the date opens the system date picker, tapping the time opens the time picker. The time button reads "Add time" in `muted` until set. "No date" clears both.
-- Repeat: a checkbox (the sentence ticks it too); when ticked, the number of days is picked on a scroll wheel (1–365) with one selection band behind the number and "days".
+- Repeat: a checkbox (the sentence ticks it too). Unticked, the sentence reads "Repeat every **x** days after I finish it" with a bold, `muted` x. Ticking shows a centred scroll wheel (1–365, starting at 1) with one selection band behind the number and "days"; the number in the sentence turns bold `ink`.
 - Save closes the popup, writes to Room, and the widget redraws with the new row. Cancel or tapping the scrim closes without saving. Back does the same.
 
 ## App screens
@@ -334,7 +334,7 @@ All screens use `background`, 24 dp side padding and the bottom nav, except Comm
 - [ ] Due labels follow the rules table in every place a todo appears
 - [ ] Todo rows look the same in the widget, Commitment detail and History (due left, checkbox right)
 - [ ] Widget: tab switch, tick and untick work without opening the app; title tap opens the todo; add opens the popup only
-- [ ] Widget fits up to 5 tabs and shows "More" beyond that; small tab baselines line up with the selected tab on a real device
+- [ ] Widget tab row slides with the selection and cuts off the next tab when more exist; small tab baselines line up with the selected tab on a real device
 - [ ] Widget small, medium and large layouts match the sizes table
 - [ ] Rest countdown runs smoothly via Chronometer and the step advances when rest ends, with the screen off
 - [ ] Quick-add opens in under 500 ms with the keyboard up and defaults to the widget's current commitment

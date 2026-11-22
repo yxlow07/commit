@@ -611,3 +611,13 @@ Found and fixed:
 - **Quick-add reused from the background kept the old commitment**: the popup is single-instance; it now takes the commitment from `onNewIntent`.
 
 Checked on the emulator: wheel scroll and snap (4 → 7 → 5, sentence follows), band, sentence tap; "Add commitment" stays visible after typing; your four commitments in quick-add (long names readable, "Code In place" preselected and scrolled to); reused popup follows the widget tab; the widget "More" picker selects a tab. Unit tests 60 of 60.
+
+More changes (same day):
+
+| Change | Status |
+| --- | --- |
+| Widget tabs: the "More" picker is gone; the row behaves like a scrolled strip (starts one tab before the selection, slides left to stay full at the end, next tab cut off with "…" when more exist). True sideways scrolling isn't possible in a widget | Done (`tabWindow`, `TabWindowTest`; tab width estimate measured on the emulator) |
+| Repeat sentence before ticking: "Repeat every **x** days after I finish it" (bold, `muted` x); ticking starts the wheel at 1 | Done |
+| Repeat wheel and its band centred in the form | Done |
+
+Checked on the emulator with four commitments: each tab selected in turn (Sync test → maio → Code In place → Schook Work) shows the sliding row with a cut-off hint; quick-add shows the "x" sentence and a centred wheel at 1. Unit tests 64 of 64.

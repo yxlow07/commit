@@ -33,6 +33,10 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -185,9 +189,11 @@ private fun RepeatField(
 ) {
     val c = Commit.colors
     val repeating = repeatDays != null || (recurDays ?: 0) > 0
-    // Remembered while unticked, so ticking again brings back the last interval.
-    var days by rememberSaveable { mutableStateOf(repeatDays ?: 4) }
-    if (repeatDays != null && repeatDays != days) days = repeatDays
+    // Nothing picked yet: the sentence shows "x". Ticking starts the wheel at 1; the last pick is
+    // remembered while unticked.
+    var picked by rememberSaveable { mutableStateOf(repeatDays) }
+    if (repeatDays != null && repeatDays != picked) picked = repeatDays
+    val days = picked ?: 1
     val weekdays = (recurDays ?: 0) > 0
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -201,10 +207,20 @@ private fun RepeatField(
                 title = "Repeat",
                 modifier = Modifier.padding(end = 4.dp),
             )
-            // The sentence ticks the box too.
+            // The sentence ticks the box too. The number is bold; before anything is picked it's a
+            // muted bold "x".
+            val sentence = buildAnnotatedString {
+                if (repeating && weekdays) {
+                    append("Repeat on fixed weekdays")
+                } else {
+                    append("Repeat every ")
+                    val number = if (repeating) days.toString() else picked?.toString() ?: "x"
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = if (repeating) c.ink else c.muted)) { append(number) }
+                    append(if (number == "1") " day after I finish it" else " days after I finish it")
+                }
+            }
             Text(
-                if (repeating && weekdays) "Repeat on fixed weekdays"
-                else "Repeat every ${if (days == 1) "day" else "$days days"} after I finish it",
+                sentence,
                 style = Commit.type.body.tnum(),
                 color = c.ink,
                 modifier = Modifier.clickable(
@@ -217,20 +233,21 @@ private fun RepeatField(
         }
         // The interval on a scroll wheel, once ticked (F4.2).
         if (repeating && !weekdays) {
-            // One selection band behind the number and its unit, as on iOS.
-            Box(Modifier.padding(start = 44.dp), contentAlignment = Alignment.CenterStart) {
-                Box(Modifier.width(150.dp).height(36.dp).background(c.fill, RoundedCornerShape(10.dp)))
+            // Centred in the form, with one selection band behind the number and its unit, as on iOS.
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Box(Modifier.width(160.dp).height(36.dp).background(c.fill, RoundedCornerShape(10.dp)))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     WheelPicker(
                         values = REPEAT_DAY_RANGE,
                         value = days,
-                        onValueChange = { days = it; onRepeatChange(it) },
+                        onValueChange = { picked = it; onRepeatChange(it) },
                         label = { it.toString() },
                         contentDescription = "Days between repeats",
                         visibleRows = if (compact) 3 else 5,
                         showBand = false,
                     )
-                    Text(if (days == 1) "day" else "days", style = Commit.type.body, color = c.ink)
+                    // Fixed width, so the number stays centred in the band as "day" / "days" changes.
+                    Text(if (days == 1) "day" else "days", style = Commit.type.body, color = c.ink, modifier = Modifier.width(44.dp))
                 }
             }
         }
