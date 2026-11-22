@@ -1,5 +1,7 @@
 package dev.yxuan.commit.widget
 
+import androidx.glance.appwidget.lazy.items
+import androidx.glance.appwidget.lazy.LazyColumn
 import android.os.SystemClock
 import android.widget.RemoteViews
 import androidx.compose.runtime.Composable
@@ -60,34 +62,48 @@ fun WorkoutPanel(routines: List<RoutineSummary>, live: LiveWorkout?) {
     }
 }
 
-/** No active workout: the routine planned for today (or the first), Start, and "Choose another". */
+/**
+ * No active workout: every routine of this commitment, in the app's order, each with its own Start.
+ * Today's planned routine gets the dark button; the others a light one. Scrolls when they don't fit.
+ */
 @Composable
 private fun Idle(routines: List<RoutineSummary>, runningElsewhere: Boolean) {
     val c = LocalWidgetColors.current
-    val usable = routines.filter { it.exerciseCount > 0 }
-    if (usable.isEmpty()) {
+    if (routines.isEmpty()) {
         Text("Add a routine in the app to start a workout.", style = TextStyle(color = c.textStrong, fontSize = 15.sp), modifier = GlanceModifier.padding(end = 10.dp))
         return
     }
     val today = LocalDate.now()
-    val pick = usable.firstOrNull { Weekdays.isPlanned(it.routine.plannedDays, today) } ?: usable.first()
-    val planned = Weekdays.isPlanned(pick.routine.plannedDays, today)
     Column(GlanceModifier.fillMaxSize().padding(end = 10.dp)) {
-        Text(pick.routine.name, maxLines = 1, style = TextStyle(color = c.ink, fontSize = 17.sp, fontWeight = FontWeight.Bold))
-        Text(
-            listOfNotNull(if (planned) "Planned today" else null, if (pick.exerciseCount == 1) "1 exercise" else "${pick.exerciseCount} exercises").joinToString(", ") +
-                if (runningElsewhere) ". Starting ends the workout in progress." else "",
-            maxLines = 2,
-            style = TextStyle(color = c.muted, fontSize = 14.sp),
-        )
-        Spacer(GlanceModifier.defaultWeight())
-        WidgetButton("Start ${pick.routine.name}", actionRunCallback<StartWorkoutAction>(actionParametersOf(RoutineIdParam to pick.routine.id)), primary = true, modifier = GlanceModifier.fillMaxWidth())
-        if (usable.size > 1) {
-            Text(
-                "Choose another",
-                style = TextStyle(color = c.ink, fontSize = 15.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center),
-                modifier = GlanceModifier.fillMaxWidth().padding(vertical = 12.dp)
-                    .clickable(actionStartActivity<MainActivity>(actionParametersOf(OpenWorkoutsParam to true))),
+        if (runningElsewhere) {
+            Text("Starting one ends the workout in progress.", maxLines = 2, style = TextStyle(color = c.muted, fontSize = 13.sp), modifier = GlanceModifier.padding(bottom = 4.dp))
+        }
+        LazyColumn(GlanceModifier.fillMaxWidth().defaultWeight()) {
+            items(routines, itemId = { it.routine.id.hashCode().toLong() }) { r -> RoutineRow(r, Weekdays.isPlanned(r.routine.plannedDays, today)) }
+        }
+    }
+}
+
+/** One routine: name, "Planned today, 3 exercises", and Start (needs at least one exercise). */
+@Composable
+private fun RoutineRow(r: RoutineSummary, planned: Boolean) {
+    val c = LocalWidgetColors.current
+    Row(GlanceModifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(GlanceModifier.defaultWeight()) {
+            Text(r.routine.name, maxLines = 1, style = TextStyle(color = c.ink, fontSize = 16.sp, fontWeight = if (planned) FontWeight.Bold else FontWeight.Normal))
+            val detail = listOfNotNull(
+                if (planned) "Planned today" else null,
+                when (r.exerciseCount) { 0 -> "No exercises"; 1 -> "1 exercise"; else -> "${r.exerciseCount} exercises" },
+            ).joinToString(", ")
+            Text(detail, maxLines = 1, style = TextStyle(color = c.muted, fontSize = 13.sp))
+        }
+        if (r.exerciseCount > 0) {
+            WidgetButton(
+                "Start",
+                actionRunCallback<StartWorkoutAction>(actionParametersOf(RoutineIdParam to r.routine.id)),
+                primary = planned,
+                height = 36.dp,
+                modifier = GlanceModifier.semantics { contentDescription = "Start ${r.routine.name}" },
             )
         }
     }
