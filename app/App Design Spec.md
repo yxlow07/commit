@@ -290,7 +290,7 @@ All screens use `background`, 24 dp side padding and the bottom nav, except Comm
 
 - Title "History" with Tasks / Workouts text tabs on the right of the same baseline.
 - Filter row: All, then one text tab per commitment (selected Bold `ink`).
-- Heatmap: 12 columns (weeks) x 7 rows (days), 3 dp gaps, radius 3, five shades. Labels under it: "12 weeks ago" left, "This week" right, in `micro`. Then one sentence in `meta` `textStrong`: "Each square is a day. Darker means more finished. 27 this week."
+- Heatmap: 12 columns (weeks) x 7 rows (days), 3 dp gaps, radius 3, five shades. Labels under it: "12 weeks ago" left, "This week" right, in `micro`. Then a legend row: "27 this week" in `meta` `textStrong` on the left; on the right "Less", an 88 x 8 dp bar (radius 4) with a gradient through the five heatmap shades, and "More", in `micro` `muted`.
 - Timeline grouped by day ("Today", "Thursday 20 November" as section headings). Each row: title, "Study, 10:40" under it, and a right-side note only for exceptions: "1 day late" in `danger`, "6 in a row" in `muted`.
 
 ### History: Workouts

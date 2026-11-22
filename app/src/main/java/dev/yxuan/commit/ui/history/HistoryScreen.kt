@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
@@ -31,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -176,7 +178,22 @@ private fun Heatmap(rows: List<CompletionRow>, clock: Clock) {
             Text("$HEATMAP_WEEKS weeks ago", style = Commit.type.micro, color = c.muted, modifier = Modifier.weight(1f))
             Text("This week", style = Commit.type.micro, color = c.muted)
         }
-        Text("Each square is a day. Darker means more finished. $thisWeek this week.", style = Commit.type.meta, color = c.textStrong)
+        // Legend: this week's count, then a Less-to-More gradient through the heatmap's shades.
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("$thisWeek this week", style = Commit.type.meta.tnum(), color = c.textStrong, modifier = Modifier.weight(1f))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = "Lighter squares mean fewer finished, darker mean more" },
+            ) {
+                Text("Less", style = Commit.type.micro, color = c.muted)
+                Box(
+                    Modifier.width(88.dp).height(8.dp).clip(RoundedCornerShape(4.dp))
+                        .background(Brush.horizontalGradient(shades))
+                )
+                Text("More", style = Commit.type.micro, color = c.muted)
+            }
+        }
     }
 }
 

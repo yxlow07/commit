@@ -623,3 +623,5 @@ More changes (same day):
 Checked on the emulator with four commitments: each tab selected in turn (Sync test → maio → Code In place → Schook Work) shows the sliding row with a cut-off hint; quick-add shows the "x" sentence and a centred wheel at 1. Unit tests 64 of 64.
 
 Fixed (2026-11-22): **"Push Day today" with no workouts.** Routines of archived or deleted commitments still counted as planned on Today and in the morning recap (the routine queries ignored the commitment). `RoutineDao.getAll` and `observeSummaries` now join to active commitments only. Seen with the archived test "Gym"; Today now reads "3 overdue." only.
+
+Changed (2026-11-22): History heatmap legend. The sentence "Each square is a day…" is replaced by "N this week" and a Less-to-More gradient bar through the heatmap shades (TalkBack still reads the count and what the shades mean).
