@@ -57,7 +57,7 @@ fun CommitDialog(
 enum class Glass {
     /** Solid `surface`. */
     None,
-    /** See-through without blur (no cross-window blur here): enough to show what's behind, text stays readable. */
+    /** No blur available: only a hint of what is behind (90 %), so text behind never competes with the panel. */
     Clear,
     /** Over a blurred backdrop: more see-through, like frosted glass. */
     Frosted,
@@ -84,7 +84,7 @@ fun DialogPanel(
                 if (glass == Glass.None) Modifier.clip(shape).background(c.surface)
                 else Modifier
                     .clip(shape)
-                    .background(c.surface.copy(alpha = if (glass == Glass.Frosted) 0.55f else if (c.isDark) 0.7f else 0.72f))
+                    .background(c.surface.copy(alpha = if (glass == Glass.Frosted) 0.55f else 0.9f))
                     .border(1.dp, Color.White.copy(alpha = if (c.isDark) 0.16f else 0.65f), shape)
             )
             .verticalScroll(rememberScrollState())

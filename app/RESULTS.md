@@ -655,6 +655,6 @@ Changed (2026-11-22), not yet verified on a device:
 - **Emulator:** opening the blurred popup froze the emulator's display (system not responding, then System UI not responding even after a reboot, load ~40). Blur is now off on emulators (goldfish/ranchu); real devices that support it keep it. The emulator needs a cold boot from Device Manager.
 
 ## More see-through glass; translucent widget (2026-11-22)
-- Panels have three levels (`Glass` in `ui/components/Dialogs.kt`): `None` (solid), `Clear` (surface at 72 %, 70 % dark, no blur available) and `Frosted` (surface at 55 % over a blurred backdrop). The quick-add / edit popup and `CommitDialog` use `Frosted` when cross-window blur is on, `Clear` otherwise.
+- Panels have three levels (`Glass` in `ui/components/Dialogs.kt`): `None` (solid), `Clear` (surface at 90 %, no blur available; was 72 %, too busy) and `Frosted` (surface at 55 % over a blurred backdrop). The quick-add / edit popup and `CommitDialog` use `Frosted` when cross-window blur is on, `Clear` otherwise.
 - Widget panel is `surface` at 72 % (`WidgetTokens.panel`), so the wallpaper shows through. Launchers draw widgets, so a widget can't blur what's behind it; this is see-through, not frosted.
 - Verified on emulator-5554 after the cold boot: translucent widget, see-through popup (`Clear`, blur is off on emulators), and the segment highlight gliding between commitments. `Frosted` still needs a real Android 12+ device.
