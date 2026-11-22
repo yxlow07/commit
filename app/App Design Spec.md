@@ -110,7 +110,7 @@ Recurring chores use the same rules for their next due date.
 ### Commitment tabs (widget)
 
 - One horizontal row of names that slides with the selection when it overflows (see Platform limits). Gap 14 dp.
-- Selected: `tab.selected` (30 / Light, `ink`) with a subtle 2 dp `faint` underline, 3 dp below the name. Others: 15 / Regular in `faint` (about 2.6:1 on light; a deliberate trade-off so the selected tab clearly leads). All sit on one text baseline.
+- Selected: `tab.selected` (30 / Light, `ink`) with a short 18 x 2 dp `track` dash centred 3 dp below the name (a hint, not a highlight). Others: 15 / Regular in `faint` (about 2.6:1 on light; a deliberate trade-off so the selected tab clearly leads). All sit on one text baseline.
 - Each tab has 12 dp padding above and below so the hit area is at least 44 dp.
 - Tapping a tab swaps the list in place. The selected tab scrolls fully into view.
 
