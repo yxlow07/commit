@@ -648,3 +648,8 @@ Changed (2026-11-22):
 - **"All done for Study."** replaces "Nothing left in Study." (widget and commitment detail).
 - **Swipe fix:** the mode (select or clear) now comes from the day first pressed; the drag detector had reported where the touch slop was crossed, which could already be the next day. Fast swipes no longer drop days (running mask within the gesture).
 Checked on the emulator: fast swipe from a selected Mon clears; from an unselected Tue selects through Fri; every day / weekdays / weekends wording; "All done for maio." on the widget.
+
+Changed (2026-11-22), not yet verified on a device:
+- **Gliding segment highlight:** the selected segment in segmented controls (commitment picker, repeat mode, theme type…) is a separate layer that springs to the new segment's position and width instead of jumping; it starts in place, and in the scrolling form it scrolls with the segments (the scroll brings the selection into view). Compiles; not seen on screen yet.
+- **Frosted glass popup and dialogs:** the quick-add / edit popup and dialogs blur what is behind them (Android 12+ cross-window blur) and use a slightly see-through panel with a thin light edge; solid panel when blur is unavailable (unsupported device, battery saver, blurs disabled).
+- **Emulator:** opening the blurred popup froze the emulator's display (system not responding, then System UI not responding even after a reboot, load ~40). Blur is now off on emulators (goldfish/ranchu); real devices that support it keep it. The emulator needs a cold boot from Device Manager.

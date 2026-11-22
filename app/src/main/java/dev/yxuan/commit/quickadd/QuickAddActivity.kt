@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import dev.yxuan.commit.appContainer
@@ -34,6 +35,8 @@ import dev.yxuan.commit.ui.components.DeleteIconButton
 import dev.yxuan.commit.ui.components.DialogPanel
 import dev.yxuan.commit.ui.components.PrimaryButton
 import dev.yxuan.commit.ui.components.TextAction
+import dev.yxuan.commit.ui.components.rememberCrossWindowBlur
+import dev.yxuan.commit.ui.components.setBlurBehind
 import dev.yxuan.commit.ui.theme.Commit
 import dev.yxuan.commit.ui.theme.CommitTheme
 import dev.yxuan.commit.ui.todos.TodoForm
@@ -80,6 +83,10 @@ class QuickAddActivity : ComponentActivity() {
         setContent {
             val activeTheme by themeFlow.collectAsState(ActiveTheme.Default)
             CommitTheme(active = activeTheme) {
+                // Frosted glass: blur the home screen behind the popup when the system can.
+                val blur = rememberCrossWindowBlur()
+                val blurRadius = with(LocalDensity.current) { 28.dp.roundToPx() }
+                LaunchedEffect(blur) { window.setBlurBehind(blur, blurRadius) }
                 val commitments by commitmentsFlow.collectAsState(emptyList())
                 var editingId by rememberSaveable { mutableStateOf<String?>(null) }
                 var title by rememberSaveable { mutableStateOf("") }
@@ -136,6 +143,7 @@ class QuickAddActivity : ComponentActivity() {
                 }
 
                 QuickAddDialog(
+                    glass = blur,
                     title = if (editing == null) "New todo" else "Edit todo",
                     onDismiss = ::finish,
                     canSave = canSave,
@@ -182,6 +190,7 @@ class QuickAddActivity : ComponentActivity() {
  */
 @Composable
 private fun QuickAddDialog(
+    glass: Boolean,
     title: String,
     onDismiss: () -> Unit,
     canSave: Boolean,
@@ -196,13 +205,15 @@ private fun QuickAddDialog(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Commit.colors.scrim)
+            // Lighter scrim over a blurred backdrop; the full one when there's no blur.
+            .background(if (glass) Commit.colors.scrim.copy(alpha = Commit.colors.scrim.alpha * 0.45f) else Commit.colors.scrim)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss)
             .imePadding()
             .padding(16.dp),
         contentAlignment = Alignment.Center,
     ) {
         DialogPanel(
+            glass = glass,
             title = title,
             actions = {
                 if (onDelete != null) {

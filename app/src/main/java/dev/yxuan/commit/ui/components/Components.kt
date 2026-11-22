@@ -1,6 +1,20 @@
 package dev.yxuan.commit.ui.components
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,8 +38,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -350,6 +362,9 @@ fun SetProgress(setNo: Int, total: Int, modifier: Modifier = Modifier, label: St
  * Forms only. Track `fill` r14 with 3 dp padding; selected segment `surface`, Bold, soft shadow.
  * Equal-width segments when the labels fit; otherwise ([scrollable]) the track scrolls sideways and
  * each segment is as wide as its label, so long names are never squeezed or cut.
+ *
+ * The highlight is its own layer that glides (spring) to the selected segment's position and width
+ * instead of jumping; it starts in place, and in the scrolling form it scrolls with the segments.
  */
 @Composable
 fun <T> SegmentedControl(
@@ -362,29 +377,64 @@ fun <T> SegmentedControl(
 ) {
     val c = Commit.colors
     val sh = Commit.shapes
-    val track = modifier
-        .fillMaxWidth()
-        .clip(RoundedCornerShape(sh.segmentTrack))
-        .background(c.fill)
-        .padding(3.dp)
-    if (!scrollable) {
-        Row(track.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            options.forEach { option ->
-                Segment(label(option), option == selected, { onSelect(option) }, Modifier.weight(1f))
-            }
-        }
-        return
-    }
-    val listState = rememberLazyListState()
+    val density = LocalDensity.current
     val selectedIndex = options.indexOf(selected)
-    // Bring the selected segment into view (e.g. the widget's current tab far down the list).
-    LaunchedEffect(selectedIndex) {
-        if (selectedIndex >= 0) listState.animateScrollToItem(selectedIndex, scrollOffset = -40)
+    // Measured segment bounds (px, relative to the row), filled in after layout.
+    val bounds = remember(options.size) { mutableStateListOf<Pair<Float, Float>?>().apply { repeat(options.size) { add(null) } } }
+    val x = remember { Animatable(0f) }
+    val w = remember { Animatable(0f) }
+    var placed by remember { mutableStateOf(false) }
+    val scroll = rememberScrollState()
+
+    LaunchedEffect(selectedIndex, bounds.getOrNull(selectedIndex)) {
+        val target = bounds.getOrNull(selectedIndex) ?: return@LaunchedEffect
+        if (!placed) {
+            // First layout: put the highlight in place without animating from the start.
+            x.snapTo(target.first); w.snapTo(target.second); placed = true
+        } else {
+            val spec = spring<Float>(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow)
+            launch { x.animateTo(target.first, spec) }
+            launch { w.animateTo(target.second, spec) }
+        }
+        // Scrolling form: bring the selected segment into view, with a little of the one before.
+        if (scrollable) scroll.animateScrollTo((target.first - with(density) { 40.dp.toPx() }).toInt().coerceAtLeast(0))
     }
-    LazyRow(track.selectableGroup(), state = listState, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        items(options.size) { i ->
-            val option = options[i]
-            Segment(label(option), option == selected, { onSelect(option) }, Modifier.widthIn(min = 72.dp), padding = 16.dp)
+
+    Box(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(sh.segmentTrack))
+            .background(c.fill)
+            .then(if (scrollable) Modifier.horizontalScroll(scroll) else Modifier)
+            .padding(3.dp),
+    ) {
+        if (placed && selectedIndex >= 0) {
+            Box(
+                Modifier
+                    .offset { IntOffset(x.value.roundToInt(), 0) }
+                    .width(with(density) { w.value.toDp() })
+                    .height(42.dp)
+                    .shadow(1.dp, RoundedCornerShape(sh.segment), ambientColor = c.ink.copy(alpha = 0.12f), spotColor = c.ink.copy(alpha = 0.12f))
+                    .clip(RoundedCornerShape(sh.segment))
+                    .background(c.surface)
+            )
+        }
+        Row(
+            Modifier.then(if (scrollable) Modifier else Modifier.fillMaxWidth()).selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            options.forEachIndexed { i, option ->
+                val m = Modifier.onPlaced { coords ->
+                    val pos = coords.positionInParent().x
+                    val width = coords.size.width.toFloat()
+                    if (bounds.getOrNull(i) != (pos to width) && i < bounds.size) bounds[i] = pos to width
+                }
+                Segment(
+                    label(option), i == selectedIndex, { onSelect(option) },
+                    if (scrollable) m.widthIn(min = 72.dp) else m.weight(1f),
+                    padding = if (scrollable) 16.dp else 6.dp,
+                )
+            }
         }
     }
 }
@@ -396,9 +446,7 @@ private fun Segment(text: String, on: Boolean, onClick: () -> Unit, modifier: Mo
     Box(
         modifier
             .height(42.dp)
-            .then(if (on) Modifier.shadow(1.dp, RoundedCornerShape(sh.segment), ambientColor = c.ink.copy(alpha = 0.12f), spotColor = c.ink.copy(alpha = 0.12f)) else Modifier)
             .clip(RoundedCornerShape(sh.segment))
-            .background(if (on) c.surface else Color.Transparent)
             .selectable(selected = on, role = Role.RadioButton, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
