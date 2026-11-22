@@ -14,9 +14,15 @@ object WorkoutFormat {
     /** The number alone, for steppers ("62.5"); the unit goes under it. */
     fun weightValue(kg: Double): String = weightFormat.format(kg)
 
-    /** "Push Day, 2 of 5": the routine and which exercise this is. */
+    /** "Push Day, 2nd exercise": the routine and which exercise this is. */
     fun position(live: LiveWorkout): String =
-        "${live.routine.name}, ${live.state.exerciseIndex + 1} of ${live.exercises.size}"
+        "${live.routine.name}, ${ordinal(live.state.exerciseIndex + 1)} exercise"
+
+    /** 1st, 2nd, 3rd, 4th … 11th, 12th, 13th … 21st, 22nd. */
+    fun ordinal(n: Int): String {
+        val suffix = if (n % 100 in 11..13) "th" else when (n % 10) { 1 -> "st"; 2 -> "nd"; 3 -> "rd"; else -> "th" }
+        return "$n$suffix"
+    }
 
     /** What the current rest leads to: "set 4", or the next exercise's name. */
     fun restThen(live: LiveWorkout): String? {
