@@ -131,7 +131,7 @@ fun LazyListScope.workoutSections(w: WorkoutSections, onOpenRoutine: (String) ->
         val accent = Color(owner.color)
         val own = w.routines.filter { it.routine.commitmentId == owner.id }
         item(key = "wh-${owner.id}") {
-            SectionHeader(owner.name, modifier = Modifier.padding(top = if (i == 0 && !topGap) 0.dp else Space.huge)) {
+            SectionHeader(owner.name, modifier = Modifier.padding(top = if (i == 0 && !topGap) 0.dp else Space.xxl)) {
                 IconAction(Glyph.Pencil, "Edit ${owner.name}", { w.onEdit(owner.id) }, tint = Commit.colors.muted, glyphSize = 18.dp)
                 IconAction(Glyph.Plus, "New routine in ${owner.name}", { w.onNewRoutine(owner.id) }, tint = Commit.colors.muted, glyphSize = 18.dp, modifier = Modifier.offset(x = 13.dp))
             }
