@@ -41,16 +41,16 @@ fun AccountSection() {
     val c = Commit.colors
 
     Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
-        SectionHeading("Account and sync")
+        SectionHeading("Account")
         when {
             !state.configured -> Text(
-                "Sync isn't set up in this build. Add the Supabase and Google keys to local.properties (see SYNC_SETUP.md); until then everything stays on this phone.",
+                "Sync isn't set up in this build (see SYNC_SETUP.md).",
                 style = Commit.type.meta,
                 color = c.textStrong,
             )
 
             !state.signedIn -> {
-                Text("Sign in to sync with the web app. Everything keeps working offline.", style = Commit.type.meta, color = c.textStrong)
+                Text("Sync with the web app.", style = Commit.type.meta, color = c.textStrong)
                 PrimaryButton(
                     "Sign in with Google",
                     enabled = !busy,
@@ -73,7 +73,6 @@ fun AccountSection() {
                     Text(statusLine(state), style = Commit.type.meta, color = if (state.error != null) c.danger else c.muted)
                 }
                 SecondaryButton("Sign out", onClick = { scope.launch { sync.signOut() } })
-                Text("Signing out stops syncing. Your data stays on this phone.", style = Commit.type.meta, color = c.muted)
             }
         }
         message?.let { Text(it, style = Commit.type.meta, color = c.danger) }

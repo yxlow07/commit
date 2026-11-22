@@ -95,7 +95,7 @@ fun SettingsScreen(
         SectionHeading("Daily recaps")
         RecapRow(
             title = "Morning recap",
-            detail = "Due today, overdue, chores and today's workout",
+            detail = "Today's plan",
             minutes = s.morningRecapTime,
             enabled = s.morningRecapEnabled,
             onToggle = { on -> viewModel.update { it.copy(morningRecapEnabled = on) } },
@@ -103,17 +103,11 @@ fun SettingsScreen(
         )
         RecapRow(
             title = "Night recap",
-            detail = "What you finished and what's due tomorrow",
+            detail = "Today's wins, tomorrow's plan",
             minutes = s.nightRecapTime,
             enabled = s.nightRecapEnabled,
             onToggle = { on -> viewModel.update { it.copy(nightRecapEnabled = on) } },
             onPickTime = { editing = NIGHT },
-        )
-        Text(
-            "Chores remind you at the morning recap time on the day they're due. A recap with nothing to report is skipped.",
-            style = Commit.type.meta,
-            color = c.muted,
-            modifier = Modifier.padding(top = Space.xs),
         )
 
         Spacer(Modifier.height(Space.section))
