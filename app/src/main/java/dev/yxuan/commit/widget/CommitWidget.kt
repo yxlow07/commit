@@ -239,18 +239,34 @@ private fun TabRow(tabs: List<CommitmentEntity>, selected: CommitmentEntity) {
             if (n > 0) Spacer(GlanceModifier.width(14.dp))
             val tab = tabs[slot.index]
             val on = slot.index == selectedIndex
-            Text(
-                tab.name,
-                maxLines = 1,
-                style = if (on) TextStyle(color = c.ink, fontSize = bigSize, fontFamily = WidgetLight)
-                // Unselected: lighter grey, regular weight, so the selected tab clearly leads.
-                else TextStyle(color = c.tabIdle, fontSize = 15.sp, fontWeight = FontWeight.Normal),
-                modifier = GlanceModifier
-                    .let { if (slot.partial) it.width(slot.width.dp) else it }
-                    .padding(top = tabPad, bottom = if (on) tabPad else tabPad + 4.dp)
-                    .clickable(actionRunCallback<SelectTabAction>(actionParametersOf(CommitmentIdParam to tab.id)))
-                    .semantics { contentDescription = tab.name + if (on) ", selected tab" else ", tab" },
-            )
+            val tap = actionRunCallback<SelectTabAction>(actionParametersOf(CommitmentIdParam to tab.id))
+            if (on) {
+                // Selected: a subtle 2 dp underline across the name. Its 5 dp (gap + bar) come out of
+                // the bottom padding, so the baseline still meets the small tabs'.
+                Column(
+                    GlanceModifier
+                        .padding(top = tabPad, bottom = (tabPad - 5.dp).coerceAtLeast(0.dp))
+                        .clickable(tap)
+                        .semantics { contentDescription = tab.name + ", selected tab" },
+                ) {
+                    Text(tab.name, maxLines = 1, style = TextStyle(color = c.ink, fontSize = bigSize, fontFamily = WidgetLight))
+                    Spacer(GlanceModifier.height(3.dp))
+                    // Estimated text width: a full-width child would stretch the column across the row.
+                    Box(GlanceModifier.width(widths[slot.index].dp).height(2.dp).cornerRadius(1.dp).background(c.faint)) {}
+                }
+            } else {
+                // Unselected: light grey, regular weight.
+                Text(
+                    tab.name,
+                    maxLines = 1,
+                    style = TextStyle(color = c.tabIdle, fontSize = 15.sp, fontWeight = FontWeight.Normal),
+                    modifier = GlanceModifier
+                        .let { if (slot.partial) it.width(slot.width.dp) else it }
+                        .padding(top = tabPad, bottom = tabPad + 4.dp)
+                        .clickable(tap)
+                        .semantics { contentDescription = tab.name + ", tab" },
+                )
+            }
         }
     }
 }
