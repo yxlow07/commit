@@ -109,7 +109,7 @@ fun CommitmentDetailScreen(
             if (openList != null && sections.isEmpty()) {
                 item {
                     Text(
-                        if (tab == 0) "Nothing left in $name." else "Nothing finished yet.",
+                        if (tab == 0) "All done for $name." else "Nothing finished yet.",
                         style = Commit.type.body,
                         color = c.textStrong,
                         modifier = Modifier.padding(horizontal = Space.screenSide).padding(start = Space.dueColumn, top = Space.s),

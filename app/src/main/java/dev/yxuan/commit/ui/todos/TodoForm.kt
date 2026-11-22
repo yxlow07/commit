@@ -212,8 +212,17 @@ private fun RepeatField(
             val bold = SpanStyle(fontWeight = FontWeight.Bold, color = if (repeating) c.ink else c.muted)
             val summary = buildAnnotatedString {
                 if (repeating && weekdays) {
-                    append("Repeat on ")
-                    withStyle(bold) { append(Weekdays.label(recurDays ?: 0)) }
+                    // "Repeat every day", "Repeat on weekdays / weekends", or "Repeat on Mon, Thu".
+                    val mask = recurDays ?: 0
+                    if (mask == Weekdays.EVERY_DAY) {
+                        append("Repeat ")
+                        withStyle(bold) { append("every day") }
+                    } else {
+                        append("Repeat on ")
+                        withStyle(bold) {
+                            append(if (mask == Weekdays.WEEKDAYS || mask == Weekdays.WEEKENDS) Weekdays.label(mask).lowercase() else Weekdays.label(mask))
+                        }
+                    }
                 } else {
                     append("Repeat every ")
                     val p = picked

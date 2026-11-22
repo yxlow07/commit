@@ -290,7 +290,7 @@ private fun TodoArea(commitment: CommitmentEntity, items: List<TodoItem>, clock:
         Box(GlanceModifier.fillMaxWidth().defaultWeight()) {
             when {
                 items.isEmpty() -> Text(
-                    "Nothing left in ${commitment.name}.",
+                    "All done for ${commitment.name}.",
                     style = TextStyle(color = c.textStrong, fontSize = 15.sp),
                     modifier = GlanceModifier.padding(start = 56.dp, top = 8.dp),
                 )

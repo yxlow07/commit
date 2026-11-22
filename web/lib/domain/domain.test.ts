@@ -112,6 +112,11 @@ describe("recurrence (RecurrenceTest)", () => {
     // No due date -> today's or the next matching day.
     expect(nextDueDay(chore(null, { recur_days: mwf }), at(2026, 11, 24, 10))).toBe(at(2026, 11, 25));
   });
+  it("weekday labels name every day, weekdays and weekends", () => {
+    expect(recurrenceLabel(chore(null, { recur_days: 127 }))).toBe("every day");
+    expect(recurrenceLabel(chore(null, { recur_days: 31 }))).toBe("weekdays");
+    expect(recurrenceLabel(chore(null, { recur_days: 96 }))).toBe("weekends");
+  });
   it("interval labels use the largest exact unit", () => {
     expect(intervalLabel(1)).toBe("every day");
     expect(intervalLabel(4)).toBe("every 4 days");

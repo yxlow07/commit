@@ -14,6 +14,9 @@ export function isRecurring(todo: Todo): boolean {
 const WEEKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export function weekdaysLabel(mask: number): string {
+  if (mask === 127) return "every day";
+  if (mask === 31) return "weekdays";
+  if (mask === 96) return "weekends";
   const parts: string[] = [];
   for (let i = 0; i < 7; i++) {
     if ((mask & (1 << i)) !== 0) parts.push(WEEKDAY_NAMES[i]);

@@ -6,7 +6,10 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -67,30 +70,38 @@ fun WeekdayToggles(mask: Int, onChange: (Int) -> Unit, modifier: Modifier = Modi
             .pointerInput(keepOne) {
                 var painting = true // select (true) or clear (false), set by the first day touched
                 var last = -1
+                // Running mask for this gesture: a fast swipe can outpace recomposition, and reading
+                // the parameter each time would drop days painted a moment earlier.
+                var working = 0
                 fun dayAt(x: Float) = (x / (rowWidth / 7f)).toInt().coerceIn(0, 6)
                 fun paint(i: Int) {
                     if (i == last) return
                     last = i
                     val bit = Weekdays.bit(days[i])
-                    val now = currentMask
-                    val next = if (painting) now or bit else now and bit.inv()
-                    if (next != now && (!keepOne || next > 0)) {
+                    val next = if (painting) working or bit else working and bit.inv()
+                    if (next != working && (!keepOne || next > 0)) {
+                        working = next
                         haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
                         currentOnChange(next)
                     }
                 }
-                detectHorizontalDragGestures(
-                    onDragStart = { offset ->
-                        val i = dayAt(offset.x)
-                        painting = !Weekdays.contains(currentMask, days[i])
-                        last = -1
-                        paint(i)
-                    },
-                    onDragEnd = { last = -1 },
-                    onDragCancel = { last = -1 },
-                ) { change, _ ->
-                    change.consume()
-                    paint(dayAt(change.position.x))
+                // Custom loop rather than detectHorizontalDragGestures: that reports where the touch
+                // slop was crossed, which can already be the next day; the mode must come from the day
+                // first pressed.
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val drag = awaitHorizontalTouchSlopOrCancellation(down.id) { change, _ -> change.consume() }
+                        ?: return@awaitEachGesture // a tap: the button's own toggle handles it
+                    val first = dayAt(down.position.x)
+                    working = currentMask
+                    painting = !Weekdays.contains(working, days[first])
+                    last = -1
+                    paint(first)
+                    paint(dayAt(drag.position.x))
+                    horizontalDrag(drag.id) { change ->
+                        change.consume()
+                        paint(dayAt(change.position.x))
+                    }
                 }
             },
         horizontalArrangement = Arrangement.spacedBy(6.dp),

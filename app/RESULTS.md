@@ -642,3 +642,9 @@ Changed (2026-11-22), todo editing:
 Checked on the emulator: date wheels (Thursday 19 November 2026), unit wheel to "2 weeks" with the summary following, delete icon. Unit tests 66 of 66; web 39 of 39.
 
 Changed (2026-11-22): **Swipe to select weekdays.** Press on a day and slide across the weekday buttons to paint several: starting on an unselected day selects every day passed, starting on a selected one clears them (a haptic tick per day; taps still toggle one day; the todo editor keeps at least one day). Same component for a routine's planned days. Checked on the emulator: Mon+Thu, swipe Tue to Fri gives Mon to Fri; swipe Fri back to Wed leaves Mon+Tue.
+
+Changed (2026-11-22):
+- **Weekday sets get names:** all seven days read "Repeat **every day**", Mon to Fri "Repeat on **weekdays**", Sat and Sun "Repeat on **weekends**"; the same names show in todo second lines, the widget and routine planned days ("Every day", "Weekdays", "Weekends"), and on the web.
+- **"All done for Study."** replaces "Nothing left in Study." (widget and commitment detail).
+- **Swipe fix:** the mode (select or clear) now comes from the day first pressed; the drag detector had reported where the touch slop was crossed, which could already be the next day. Fast swipes no longer drop days (running mask within the gesture).
+Checked on the emulator: fast swipe from a selected Mon clears; from an unselected Tue selects through Fri; every day / weekdays / weekends wording; "All done for maio." on the widget.

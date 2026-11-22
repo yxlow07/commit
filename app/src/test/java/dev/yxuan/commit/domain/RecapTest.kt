@@ -103,6 +103,10 @@ class RecapTest {
         assertTrue(Weekdays.isPlanned(mask, LocalDate.of(2026, 11, 23))) // Monday
         assertFalse(Weekdays.isPlanned(mask, LocalDate.of(2026, 11, 24)))
         assertEquals("Mon, Thu", Weekdays.label(mask, Locale.UK))
+        assertEquals("Every day", Weekdays.label(127, Locale.UK))
+        assertEquals("Weekdays", Weekdays.label(31, Locale.UK))
+        assertEquals("Weekends", Weekdays.label(96, Locale.UK))
+        assertEquals("Mon, Tue, Wed, Thu, Sat", Weekdays.label(31 - 16 + 32, Locale.UK))
         assertEquals(1, Weekdays.toggle(mask, DayOfWeek.THURSDAY))
     }
 }

@@ -15,8 +15,19 @@ object Weekdays {
 
     fun toggle(mask: Int, day: DayOfWeek): Int = mask xor bit(day)
 
-    /** "Mon, Thu" (spec: metadata joined with commas), or "" when no day is set. */
-    fun label(mask: Int, locale: Locale = Locale.getDefault()): String =
-        DayOfWeek.entries.filter { contains(mask, it) }
+    const val EVERY_DAY = 127 // Mon … Sun
+    const val WEEKDAYS = 31 // Mon … Fri
+    const val WEEKENDS = 96 // Sat, Sun
+
+    /**
+     * "Every day", "Weekdays", "Weekends" for those sets; otherwise "Mon, Thu" (spec: metadata
+     * joined with commas), or "" when no day is set.
+     */
+    fun label(mask: Int, locale: Locale = Locale.getDefault()): String = when (mask) {
+        EVERY_DAY -> "Every day"
+        WEEKDAYS -> "Weekdays"
+        WEEKENDS -> "Weekends"
+        else -> DayOfWeek.entries.filter { contains(mask, it) }
             .joinToString(", ") { it.getDisplayName(TextStyle.SHORT, locale) }
+    }
 }

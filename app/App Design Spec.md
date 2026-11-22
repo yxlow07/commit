@@ -192,7 +192,7 @@ Use `SizeMode.Responsive` with three layouts:
 | State | What shows |
 | --- | --- |
 | Normal | As above |
-| Everything in the tab done | Rows disappear on the next redraw; the list area shows "Nothing left in Study." in `textStrong`, indented to the title column |
+| Everything in the tab done | Rows disappear on the next redraw; the list area shows "All done for Study." in `textStrong`, indented to the title column |
 | No commitments yet | "Add your first commitment" and a primary button that opens the app on the new-commitment screen |
 | Dark mode | Same layout with dark tokens (use `GlanceTheme` or day/night `ColorProvider`s) |
 
@@ -320,7 +320,7 @@ All screens use `background`, 24 dp side padding and the bottom nav, except Comm
 - Use numerals for counts in summaries ("4 due today"), words only in notification titles where a sentence reads better.
 - Times are 24-hour ("18:00"); dates are "Fri 28 Nov" or "28 Nov". No ordinal suffixes.
 - Join metadata with commas ("Study, 10:40"), not middle dots.
-- Empty and error states say what to do next: "Nothing left in Study.", "Add your first commitment", "This file has no colours section." No apologies, no exclamation marks.
+- Empty and error states say what to do next: "All done for Study.", "Add your first commitment", "This file has no colours section." No apologies, no exclamation marks.
 
 ### Accessibility
 
