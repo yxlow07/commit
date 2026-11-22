@@ -33,7 +33,7 @@ import dev.yxuan.commit.domain.TodoItem
 import dev.yxuan.commit.ui.AppViewModelFactory
 import dev.yxuan.commit.ui.commitments.CommitmentDialog
 import dev.yxuan.commit.ui.common.openQuickAdd
-import dev.yxuan.commit.ui.components.PrimaryButton
+import dev.yxuan.commit.ui.components.PrimaryRoundButton
 import dev.yxuan.commit.ui.components.PushedTopBar
 import dev.yxuan.commit.ui.components.ScreenTitle
 import dev.yxuan.commit.ui.components.SectionHeading
@@ -56,7 +56,7 @@ import java.util.Locale
 private data class Section(val title: String, val danger: Boolean, val rows: List<Row>)
 private data class Row(val item: TodoItem, val second: String?, val checked: Boolean, val doneAt: Long? = null)
 
-/** Commitment detail (pushed): title, "4 open, 1 overdue", Open / Done, sections, "Add to Study". */
+/** Commitment detail (pushed): title, "4 open, 1 overdue", Open / Done, sections, + button (labelled "Add to Study"). */
 @Composable
 fun CommitmentDetailScreen(
     onBack: () -> Unit,
@@ -134,8 +134,9 @@ fun CommitmentDetailScreen(
             }
         }
         if (commitment != null) {
-            PrimaryButton(
-                "Add to $name",
+            // Just the + (as on Today); the name is in the label for screen readers.
+            PrimaryRoundButton(
+                contentDescription = "Add to $name",
                 onClick = { openQuickAdd(context, viewModel.commitmentId) },
                 modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = Space.screenSide, bottom = Space.xxl),
             )

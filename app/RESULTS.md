@@ -667,3 +667,4 @@ Changed (2026-11-22), not yet verified on a device:
 
 ## Commitment colour on Today (2026-11-22)
 - Commitment colours were picked in the dialog but shown nowhere since the design pass (spec: greyscale, red only for late). On Today each row now shows its count in the commitment's colour and its detail line in `muted` lerped 35 % toward it (`NavRow.trailingColor` / `detailColor`). Spec rule 1 notes the exception. Verified on the emulator.
+- Commitment page: the wide "Add to X" button is now the round + (`PrimaryRoundButton`, as on Today), bottom right; "Add to X" stays as its screen-reader label.
