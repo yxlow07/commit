@@ -46,36 +46,44 @@ class WorkoutEngineTest {
     }
 
     @Test
-    fun restEndAdvancesToNextSetAndCarriesEdits() {
+    fun endedRestWaitsForNextSetThenCarriesEdits() {
         var st = engine.start("session", "r", t0)
         st = engine.adjustWeight(st, 5.0)
         st = engine.primary(st, s(10)).state
-        val resolved = engine.resolve(st, s(70))
-        assertEquals(READY, resolved.state.phase)
-        assertEquals(2, resolved.state.setNo)
-        assertEquals(65.0, resolved.state.weight, 0.0)
-        // Not yet ended: nothing happens.
-        assertEquals(st, engine.resolve(st, s(69)).state)
+        // The rest ran out long ago: still resting (overtime) until the user taps Next set.
+        val waiting = engine.resolve(st, s(500)).state
+        assertEquals(st, waiting)
+        val next = engine.skip(waiting, s(500)).state
+        assertEquals(READY, next.phase)
+        assertEquals(2, next.setNo)
+        assertEquals(65.0, next.weight, 0.0)
+        // The new set's timer starts when Next set is tapped.
+        assertEquals(s(500), next.phaseStartedAt)
     }
 
     @Test
     fun lastSetUsesRestBetweenExercisesThenTimedExerciseRunsHandsFree() {
         var st = engine.start("session", "r", t0)
-        st = engine.resolve(engine.primary(st, s(0)).state, s(60)).state // set 1 + rest
+        st = engine.skip(engine.resolve(engine.primary(st, s(0)).state, s(60)).state, s(60)).state // set 1 + rest + Next set
         val afterLast = engine.primary(st, s(100))
         assertEquals(REST, afterLast.state.phase)
         assertEquals(s(220), afterLast.state.phaseEndsAt) // 120 s between exercises
 
-        // Rest ends -> plank work starts by itself (F5.5), then rest, then set 2, then complete.
-        val work = engine.resolve(afterLast.state, s(220)).state
+        // Rest ends and waits; Next set starts the plank's work timer by itself (F5.5).
+        assertEquals(REST, engine.resolve(afterLast.state, s(300)).state.phase)
+        val work = engine.skip(afterLast.state, s(220)).state
         assertEquals(WORK, work.phase)
         assertEquals(1, work.exerciseIndex)
         assertEquals(s(260), work.phaseEndsAt)
 
-        val done = engine.resolve(work, s(10_000))
+        // Work ends -> set logged at its exact end, then the 30 s rest; Next set -> set 2 -> complete.
+        val rest = engine.resolve(work, s(1_000))
+        assertEquals(REST, rest.state.phase)
+        assertEquals(listOf(LoggedSet("plank", 1, 0, 0.0, s(260))), rest.logged)
+        val set2 = engine.skip(rest.state, s(1_000)).state
+        val done = engine.resolve(set2, s(10_000))
         assertEquals(COMPLETE, done.state.phase)
-        // Both plank sets logged at their exact end times, as timed sets (no reps/weight).
-        assertEquals(listOf(LoggedSet("plank", 1, 0, 0.0, s(260)), LoggedSet("plank", 2, 0, 0.0, s(330))), done.logged)
+        assertEquals(listOf(LoggedSet("plank", 2, 0, 0.0, s(1_040))), done.logged)
     }
 
     @Test

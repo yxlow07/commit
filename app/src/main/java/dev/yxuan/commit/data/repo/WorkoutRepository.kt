@@ -30,6 +30,9 @@ data class LiveWorkout(
     val isTimed: Boolean get() = (exercise?.durationSeconds ?: 0) > 0
     val volume: Double get() = WorkoutEngine.volume(sets.map { it.reps to it.weight })
 
+    /** The rest has run out and is waiting for "Next set" (shown as red overtime). */
+    fun restOver(now: Long): Boolean = state.phase == WorkoutPhase.REST && (state.phaseEndsAt ?: Long.MAX_VALUE) <= now
+
     /** What comes after the current rest, e.g. "Bench press, set 3". */
     val upNext: String?
         get() {
@@ -114,7 +117,10 @@ class WorkoutRepository(
     suspend fun onTimer() {
         val before = active.get() ?: return
         val live = mutate { engine, s, now -> engine.resolve(s, now) } ?: return
-        if (live.state != before) effects.alert(live)
+        // Alert when the workout moved on, or when a rest has just run out (it now waits in overtime).
+        val now = clock.millis()
+        val restJustEnded = live.restOver(now) && now - (live.state.phaseEndsAt ?: now) < 60_000
+        if (live.state != before || restJustEnded) effects.alert(live)
     }
 
     /**
@@ -187,7 +193,8 @@ class WorkoutRepository(
     }
 
     private suspend fun publish(live: LiveWorkout) {
-        effects.setTimer(live.state.phaseEndsAt)
+        // Only future ends: a rest in overtime has its end in the past, and arming that would fire at once, forever.
+        effects.setTimer(live.state.phaseEndsAt?.takeIf { it > clock.millis() })
         effects.changed(live)
     }
 }

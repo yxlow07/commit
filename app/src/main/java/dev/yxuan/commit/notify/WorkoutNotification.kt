@@ -47,7 +47,13 @@ object WorkoutNotification {
                 .setContentTitle(ex?.name ?: live.routine.name)
                 .setContentText(WorkoutFormat.setLine(live))
                 .addAction(0, if (live.isTimed) "Start set" else "Done set", NotificationActionReceiver.workout(context, ACTION_WORKOUT_DONE_SET))
-            WorkoutPhase.REST -> builder
+            WorkoutPhase.REST -> if (live.restOver(System.currentTimeMillis())) builder
+                // Overtime: counts up from the end of the rest until "Next set".
+                .setContentTitle("Rest over")
+                .setContentText(WorkoutFormat.nextLine(live) ?: "")
+                .setWhen(s.phaseEndsAt ?: System.currentTimeMillis()).setShowWhen(true).setUsesChronometer(true)
+                .addAction(0, "Next set", NotificationActionReceiver.workout(context, ACTION_WORKOUT_SKIP_REST))
+            else builder
                 .setContentTitle("Resting")
                 .setContentText(WorkoutFormat.nextLine(live) ?: "")
                 .countdownTo(s.phaseEndsAt)
@@ -72,7 +78,8 @@ object WorkoutNotification {
         val text = when (s.phase) {
             WorkoutPhase.READY -> "Go: ${live.exercise?.name}, set ${s.setNo}"
             WorkoutPhase.WORK -> "Go: ${live.exercise?.name}, ${live.exercise?.durationSeconds} s"
-            WorkoutPhase.REST -> "Resting. " + (WorkoutFormat.nextLine(live) ?: "")
+            WorkoutPhase.REST -> if (live.restOver(System.currentTimeMillis())) "Rest over. " + (WorkoutFormat.nextLine(live) ?: "")
+                else "Resting. " + (WorkoutFormat.nextLine(live) ?: "")
             WorkoutPhase.COMPLETE -> "Workout done, ${WorkoutFormat.summary(live)}"
         }
         val notification = NotificationCompat.Builder(context, Notifications.CHANNEL_WORKOUT_ALERTS)

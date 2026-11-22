@@ -140,21 +140,23 @@ private fun Live(live: LiveWorkout) {
             return@Column
         }
         val ex = live.exercise ?: return@Column
-        // On a tall widget, between sets, the workout time fills the free middle as the headline.
-        // During a rest or a timed hold the countdown is the headline, so the time is a label.
-        val heroTimer = LocalSize.current.height >= HERO_TIMER_HEIGHT && s.phase == WorkoutPhase.READY && !live.isTimed
+        // Time in the current set, counting from when the set began (after the last rest). On a tall
+        // widget it fills the free middle; on a shorter one it's a label. A rest or timed hold shows
+        // its countdown instead.
+        val setTimer = s.phase == WorkoutPhase.READY && !live.isTimed
+        val heroTimer = setTimer && LocalSize.current.height >= HERO_TIMER_HEIGHT
         Column(GlanceModifier.fillMaxWidth()) {
             Text(ex.name, maxLines = 1, style = TextStyle(color = c.ink, fontSize = 17.sp, fontWeight = FontWeight.Bold))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(WorkoutFormat.position(live) + if (heroTimer) "" else ", ", maxLines = 1, style = TextStyle(color = c.muted, fontSize = 13.sp, fontWeight = FontWeight.Medium))
-                if (!heroTimer) Elapsed(live.startedAt)
+                Text(WorkoutFormat.position(live) + if (setTimer && !heroTimer) ", " else "", maxLines = 1, style = TextStyle(color = c.muted, fontSize = 13.sp, fontWeight = FontWeight.Medium))
+                if (setTimer && !heroTimer) Elapsed(s.phaseStartedAt)
             }
         }
         Spacer(GlanceModifier.height(12.dp))
         SetProgress(s.setNo, ex.sets)
         if (heroTimer) {
             Box(GlanceModifier.fillMaxWidth().defaultWeight(), contentAlignment = Alignment.Center) {
-                Elapsed(live.startedAt, big = true)
+                Elapsed(s.phaseStartedAt, big = true)
             }
         } else {
             Spacer(GlanceModifier.height(14.dp))
@@ -174,12 +176,20 @@ private fun Live(live: LiveWorkout) {
                 WidgetButton("Done set", actionRunCallback<DoneSetAction>(), primary = true, modifier = GlanceModifier.fillMaxWidth())
             }
             WorkoutPhase.REST, WorkoutPhase.WORK -> {
-                s.phaseEndsAt?.let { Countdown(it) }
-                val under = if (s.phase == WorkoutPhase.REST) WorkoutFormat.restThen(live)?.let { "Rest, then $it" } ?: "Rest" else "Hold, then rest"
-                Text(under, maxLines = 1, style = TextStyle(color = c.muted, fontSize = 14.sp, textAlign = TextAlign.Center), modifier = GlanceModifier.fillMaxWidth())
+                // The rest-over alarm redraws the widget, so it flips to overtime at 0.
+                val over = live.restOver(System.currentTimeMillis())
+                s.phaseEndsAt?.let { Countdown(it, over = over) }
+                val under = when {
+                    over -> WorkoutFormat.restThen(live)?.let { "Rest over, next: $it" } ?: "Rest over"
+                    s.phase == WorkoutPhase.REST -> WorkoutFormat.restThen(live)?.let { "Rest, then $it" } ?: "Rest"
+                    else -> "Hold, then rest"
+                }
+                Text(under, maxLines = 1, style = TextStyle(color = if (over) c.danger else c.muted, fontSize = 14.sp, textAlign = TextAlign.Center), modifier = GlanceModifier.fillMaxWidth())
                 Spacer(GlanceModifier.height(16.dp))
                 Row(GlanceModifier.fillMaxWidth()) {
-                    if (s.phase == WorkoutPhase.REST) {
+                    if (over) {
+                        WidgetButton("Next set", actionRunCallback<SkipAction>(), primary = true, modifier = GlanceModifier.defaultWeight())
+                    } else if (s.phase == WorkoutPhase.REST) {
                         WidgetButton("Add 30 s", actionRunCallback<AddRestAction>(), primary = false, modifier = GlanceModifier.defaultWeight())
                         Spacer(GlanceModifier.width(8.dp))
                         WidgetButton("Skip rest", actionRunCallback<SkipAction>(), primary = true, modifier = GlanceModifier.defaultWeight())
@@ -204,6 +214,7 @@ private fun CompactLive(live: LiveWorkout) {
     val ex = live.exercise ?: return
     val resting = s.phase == WorkoutPhase.REST
     val title = when {
+        resting && live.restOver(System.currentTimeMillis()) -> WorkoutFormat.restThen(live)?.let { "Rest over, next: $it" } ?: "Rest over"
         resting -> WorkoutFormat.restThen(live)?.let { "Rest, then $it" } ?: "Rest"
         s.phase == WorkoutPhase.WORK -> "${ex.name}, hold"
         else -> ex.name
@@ -212,8 +223,10 @@ private fun CompactLive(live: LiveWorkout) {
         Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
             Text(title, maxLines = 1, style = TextStyle(color = c.ink, fontSize = 16.sp, fontWeight = FontWeight.Bold), modifier = GlanceModifier.defaultWeight())
             Text("Set ${s.setNo} of ${ex.sets}", maxLines = 1, style = TextStyle(color = c.muted, fontSize = 13.sp))
-            Text(", ", style = TextStyle(color = c.muted, fontSize = 13.sp))
-            Elapsed(live.startedAt)
+            if (s.phase == WorkoutPhase.READY && !live.isTimed) {
+                Text(", ", style = TextStyle(color = c.muted, fontSize = 13.sp))
+                Elapsed(s.phaseStartedAt)
+            }
         }
         Spacer(GlanceModifier.height(6.dp))
         when (s.phase) {
@@ -231,10 +244,13 @@ private fun CompactLive(live: LiveWorkout) {
                 WidgetButton(if (live.isTimed) "Start set" else "Done set", actionRunCallback<DoneSetAction>(), primary = true, modifier = GlanceModifier.fillMaxWidth(), height = 44.dp)
             }
             WorkoutPhase.REST, WorkoutPhase.WORK -> {
-                s.phaseEndsAt?.let { Countdown(it, small = true) }
+                val over = live.restOver(System.currentTimeMillis())
+                s.phaseEndsAt?.let { Countdown(it, small = true, over = over) }
                 Spacer(GlanceModifier.defaultWeight())
                 Row(GlanceModifier.fillMaxWidth()) {
-                    if (resting) {
+                    if (over) {
+                        WidgetButton("Next set", actionRunCallback<SkipAction>(), primary = true, modifier = GlanceModifier.defaultWeight(), height = 44.dp)
+                    } else if (resting) {
                         WidgetButton("Add 30 s", actionRunCallback<AddRestAction>(), primary = false, modifier = GlanceModifier.defaultWeight(), height = 44.dp)
                         Spacer(GlanceModifier.width(8.dp))
                         WidgetButton("Skip rest", actionRunCallback<SkipAction>(), primary = true, modifier = GlanceModifier.defaultWeight(), height = 44.dp)
@@ -270,7 +286,7 @@ private fun SetProgress(setNo: Int, total: Int) {
 }
 
 /**
- * Time since the workout started, counting up on its own (a system Chronometer, no widget updates):
+ * Time in the current set since [startedAt], counting up on its own (a system Chronometer, no widget updates):
  * [big] is the tall panel's 56 sp centred headline, otherwise a 13 sp label.
  */
 @Composable
@@ -283,20 +299,23 @@ private fun Elapsed(startedAt: Long, big: Boolean = false) {
     }
     // Fixed width: a RemoteViews child otherwise stretches and pushes the exercise name out.
     val size = if (big) GlanceModifier.fillMaxWidth().height(64.dp) else GlanceModifier.width(56.dp).height(16.dp)
-    AndroidRemoteViews(views, modifier = size.semantics { contentDescription = "Workout time" })
+    AndroidRemoteViews(views, modifier = size.semantics { contentDescription = "Time in this set" })
 }
 
-/** Live countdown: the system Chronometer ticks every second at no widget-update cost (F5.6). */
+/**
+ * Live countdown: the system Chronometer ticks every second at no widget-update cost (F5.6).
+ * [over]: the rest has run out, so it counts up from the end in `danger` red, as "+0:12".
+ */
 @Composable
-private fun Countdown(endsAt: Long, small: Boolean = false) {
+private fun Countdown(endsAt: Long, small: Boolean = false, over: Boolean = false) {
     val context = LocalContext.current
     val c = LocalWidgetColors.current
     val remaining = endsAt - System.currentTimeMillis()
     val layout = if (small) R.layout.widget_chronometer_small else R.layout.widget_chronometer
     val views = RemoteViews(context.packageName, layout).apply {
-        setChronometer(R.id.chronometer, SystemClock.elapsedRealtime() + remaining, null, true)
-        setChronometerCountDown(R.id.chronometer, true)
-        setTextColor(R.id.chronometer, c.ink.getColor(context).toArgb())
+        setChronometer(R.id.chronometer, SystemClock.elapsedRealtime() + remaining, if (over) "+%s" else null, true)
+        setChronometerCountDown(R.id.chronometer, !over)
+        setTextColor(R.id.chronometer, (if (over) c.danger else c.ink).getColor(context).toArgb())
     }
     // Fixed height: a RemoteViews child otherwise takes all the space left and pushes the buttons out.
     AndroidRemoteViews(views, modifier = GlanceModifier.fillMaxWidth().height(if (small) 46.dp else 86.dp))

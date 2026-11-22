@@ -77,8 +77,10 @@ private fun LiveContent(live: LiveWorkout, vm: LiveWorkoutViewModel, onFinished:
         return
     }
     val ex = live.exercise ?: return
-    // Workout time as the screen's headline.
-    ElapsedText(live.startedAt, t.displayL.tnum(), c.ink, Modifier.fillMaxWidth().padding(bottom = Space.l))
+    // Time in the current set as the headline, between sets; a rest or timed hold shows its countdown.
+    if (s.phase == WorkoutPhase.READY && !live.isTimed) {
+        ElapsedText(s.phaseStartedAt, t.displayL.tnum(), c.ink, Modifier.fillMaxWidth().padding(bottom = Space.l))
+    }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
         Text(ex.name, style = t.bodyL.copy(fontWeight = FontWeight.Bold), color = c.ink, modifier = Modifier.weight(1f))
         Text(WorkoutFormat.position(live), style = t.caption, color = c.muted)
@@ -99,11 +101,28 @@ private fun LiveContent(live: LiveWorkout, vm: LiveWorkoutViewModel, onFinished:
             }
         }
         WorkoutPhase.REST, WorkoutPhase.WORK -> {
-            Countdown(s.phaseEndsAt ?: 0)
-            val under = if (s.phase == WorkoutPhase.REST) WorkoutFormat.restThen(live)?.let { "Rest, then $it" } ?: "Rest" else "Hold, then rest"
-            Text(under, style = t.meta, color = c.muted, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+            val endsAt = s.phaseEndsAt ?: 0
+            // Ticks so the screen flips to overtime the moment the rest runs out.
+            val now by produceState(System.currentTimeMillis(), endsAt) {
+                while (true) { value = System.currentTimeMillis(); delay(200) }
+            }
+            val over = s.phase == WorkoutPhase.REST && now >= endsAt
+            if (over) {
+                // Overtime: red, counting up from the end of the rest, until Next set.
+                ElapsedText(endsAt, t.displayXl.tnum(), c.danger, Modifier.fillMaxWidth(), prefix = "+")
+            } else {
+                Countdown(endsAt)
+            }
+            val under = when {
+                over -> WorkoutFormat.restThen(live)?.let { "Rest over, next: $it" } ?: "Rest over"
+                s.phase == WorkoutPhase.REST -> WorkoutFormat.restThen(live)?.let { "Rest, then $it" } ?: "Rest"
+                else -> "Hold, then rest"
+            }
+            Text(under, style = t.meta, color = if (over) c.danger else c.muted, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
             Row(Modifier.fillMaxWidth().padding(top = Space.s), horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                if (s.phase == WorkoutPhase.REST) {
+                if (over) {
+                    PrimaryButton("Next set", onClick = vm::skip, modifier = Modifier.weight(1f))
+                } else if (s.phase == WorkoutPhase.REST) {
                     SecondaryButton("Add 30 s", onClick = vm::addRest, modifier = Modifier.weight(1f))
                     PrimaryButton("Skip rest", onClick = vm::skip, modifier = Modifier.weight(1f))
                 } else {
@@ -140,9 +159,9 @@ private fun Countdown(endsAt: Long) {
     )
 }
 
-/** Time since the workout started ("04:05", "1:02:40", as the widget's Chronometer shows it), ticking every second. */
+/** Time since [startedAt], the start of the current set ("01:05", as the widget's Chronometer shows it), ticking every second. */
 @Composable
-private fun ElapsedText(startedAt: Long, style: TextStyle, color: Color, modifier: Modifier = Modifier) {
+private fun ElapsedText(startedAt: Long, style: TextStyle, color: Color, modifier: Modifier = Modifier, prefix: String = "") {
     val now by produceState(System.currentTimeMillis(), startedAt) {
         while (true) {
             value = System.currentTimeMillis()
@@ -151,5 +170,5 @@ private fun ElapsedText(startedAt: Long, style: TextStyle, color: Color, modifie
     }
     val total = ((now - startedAt) / 1000).coerceAtLeast(0)
     val text = if (total >= 3600) "%d:%02d:%02d".format(total / 3600, total / 60 % 60, total % 60) else "%02d:%02d".format(total / 60, total % 60)
-    Text(text, style = style, color = color, textAlign = TextAlign.Center, modifier = modifier.semantics { contentDescription = "Workout time $text" })
+    Text(prefix + text, style = style, color = color, textAlign = TextAlign.Center, modifier = modifier.semantics { contentDescription = (if (prefix.isEmpty()) "Time in this set " else "Rest over by ") + text })
 }

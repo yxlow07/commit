@@ -20,8 +20,9 @@ data class Step(val state: ActiveWorkoutEntity, val logged: List<LoggedSet> = em
  * and [resolve] replays any timers that have already ended, so a late alarm or a redraw after
  * a reboot always lands on the right step (PRD "Timers and state").
  *
- * Flow per set: READY (user edits reps/weight, taps "Done set") → REST → next set.
- * Timed exercises: READY ("Start") → WORK (timer) → REST → WORK … hands-free.
+ * Flow per set: READY (user edits reps/weight, taps "Done set") → REST → "Next set" → next set.
+ * A rest that runs out stays in REST (overtime, counted up in red) until the user taps Next set.
+ * Timed exercises: READY ("Start") → WORK (timer) → REST → Next set → WORK.
  * After an exercise's last set the rest is the routine's longer rest between exercises;
  * after the last exercise the workout is COMPLETE.
  */
@@ -52,7 +53,8 @@ class WorkoutEngine(
                     logged += log(s, endsAt)
                     afterSet(s, endsAt)
                 }
-                REST -> afterRest(s, endsAt)
+                // An ended rest waits for "Next set" (overtime); it never moves on by itself.
+                REST -> break
                 else -> break
             }
         }
@@ -73,7 +75,7 @@ class WorkoutEngine(
         return Step(afterSet(state, now), listOf(log(state, now)))
     }
 
-    /** "Skip rest", or end a timed work period early (the set still counts). */
+    /** "Skip rest" / "Next set" (also in overtime), or end a timed work period early (the set still counts). */
     fun skip(state: ActiveWorkoutEntity, now: Long): Step = when (state.phase) {
         REST -> Step(afterRest(state, now))
         WORK -> Step(afterSet(state, now), listOf(log(state, now)))
