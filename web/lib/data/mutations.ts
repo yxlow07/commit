@@ -30,15 +30,15 @@ async function updateRow<T extends TableName>(qc: QueryClient, table: T, id: str
 
 const softDelete = (qc: QueryClient, table: TableName, id: string) => updateRow(qc, table, id, { deleted: 1 });
 
-/** Renumbers sort_order after moving [id] by [delta] within [items] (already in display order). */
-async function reorder<T extends "commitments" | "routines" | "exercises">(
-  qc: QueryClient, table: T, items: Tables[T][], id: string, delta: number,
+/**
+ * Saves [ids] as the new order of [items] (drag to reorder): each row's sort_order becomes its index,
+ * writing only rows that changed. Rows of [items] missing from [ids] keep their place after them.
+ */
+async function reorderTo<T extends "commitments" | "routines" | "exercises">(
+  qc: QueryClient, table: T, items: Tables[T][], ids: string[],
 ) {
-  const list = [...items];
-  const from = list.findIndex((x) => x.id === id);
-  const to = from + delta;
-  if (from < 0 || to < 0 || to >= list.length) return;
-  list.splice(to, 0, ...list.splice(from, 1));
+  const byId = new Map(items.map((x) => [x.id, x]));
+  const list = [...ids.map((id) => byId.get(id)).filter((x): x is Tables[T] => x != null), ...items.filter((x) => !ids.includes(x.id))];
   await Promise.all(
     list.map((x, i) => (x.sort_order === i ? null : updateRow(qc, table, x.id, { sort_order: i } as Partial<Tables[T]>))),
   );
@@ -54,8 +54,12 @@ export const createCommitment = (qc: QueryClient, name: string, type: Commitment
 export const updateCommitment = (qc: QueryClient, id: string, changes: Partial<Commitment>) =>
   updateRow(qc, "commitments", id, changes);
 
-export const moveCommitment = (qc: QueryClient, items: Commitment[], id: string, delta: number) =>
-  reorder(qc, "commitments", items, id, delta);
+export const reorderCommitments = (qc: QueryClient, items: Commitment[], ids: string[]) =>
+  reorderTo(qc, "commitments", items, ids);
+
+/** Brings an archived commitment back, at the end of the list (as on the phone). */
+export const restoreCommitment = (qc: QueryClient, id: string, sortOrder: number) =>
+  updateRow(qc, "commitments", id, { archived: 0, sort_order: sortOrder });
 
 // ---- Todos (F2, F4) ----
 
@@ -113,7 +117,7 @@ export const createRoutine = (qc: QueryClient, commitmentId: string, name: strin
 
 export const updateRoutine = (qc: QueryClient, id: string, changes: Partial<Routine>) => updateRow(qc, "routines", id, changes);
 export const deleteRoutine = (qc: QueryClient, id: string) => softDelete(qc, "routines", id);
-export const moveRoutine = (qc: QueryClient, items: Routine[], id: string, delta: number) => reorder(qc, "routines", items, id, delta);
+export const reorderRoutines = (qc: QueryClient, items: Routine[], ids: string[]) => reorderTo(qc, "routines", items, ids);
 
 export interface ExerciseInput {
   name: string;
@@ -134,7 +138,7 @@ export const createExercise = (qc: QueryClient, routineId: string, e: ExerciseIn
 
 export const updateExercise = (qc: QueryClient, id: string, e: ExerciseInput) => updateRow(qc, "exercises", id, exerciseFields(e));
 export const deleteExercise = (qc: QueryClient, id: string) => softDelete(qc, "exercises", id);
-export const moveExercise = (qc: QueryClient, items: Exercise[], id: string, delta: number) => reorder(qc, "exercises", items, id, delta);
+export const reorderExercises = (qc: QueryClient, items: Exercise[], ids: string[]) => reorderTo(qc, "exercises", items, ids);
 
 // ---- History (F8.5) ----
 

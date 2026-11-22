@@ -8,6 +8,7 @@ import {
   createTheme,
   DEFAULT_SETTINGS,
   deleteTheme,
+  restoreCommitment,
   saveSettings,
   settingsId,
 } from "@/lib/data/mutations";
@@ -68,7 +69,7 @@ export default function SettingsPage() {
         <h2 className="font-semibold">Daily recaps on the phone</h2>
         <RecapRow
           label="Morning recap"
-          hint="Due today, overdue, chores and today's workout"
+          hint="Today's plan"
           minutes={s.morning_recap_time}
           enabled={s.morning_recap_enabled === 1}
           onTime={(m) => save({ morning_recap_time: m })}
@@ -76,17 +77,16 @@ export default function SettingsPage() {
         />
         <RecapRow
           label="Night recap"
-          hint="What you did today and what's due tomorrow"
+          hint="Today's wins, tomorrow's plan"
           minutes={s.night_recap_time}
           enabled={s.night_recap_enabled === 1}
           onTime={(m) => save({ night_recap_time: m })}
           onToggle={(on) => save({ night_recap_enabled: on ? 1 : 0 })}
         />
-        <p className="text-xs text-fg-muted">
-          Recurring chores remind you at the morning recap time on the day they&apos;re due. Changes reach the phone on its next sync.
-        </p>
         <ErrorText error={action.error} />
       </Card>
+
+      <ArchivedSection />
 
       <Card className="flex items-center justify-between gap-3">
         <div className="min-w-0">
@@ -351,5 +351,37 @@ function RecapRow({
         className="h-5 w-5 accent-[var(--primary)]"
       />
     </div>
+  );
+}
+
+/** Archived commitments, each with Restore (back at the end of the list, as on the phone). */
+function ArchivedSection() {
+  const qc = useQueryClient();
+  const commitmentsQ = useTable("commitments");
+  const action = useAction();
+  const all = commitmentsQ.data ?? [];
+  const archived = all.filter((c) => c.archived).sort((a, b) => b.updated_at - a.updated_at);
+  const nextOrder = () => Math.max(-1, ...all.filter((c) => !c.archived).map((c) => c.sort_order)) + 1;
+
+  return (
+    <Card className="flex flex-col gap-2">
+      <h2 className="font-semibold">Archived</h2>
+      {archived.length === 0 ? (
+        <p className="text-sm text-fg-muted">Nothing archived. Archive a commitment from its edit dialog.</p>
+      ) : (
+        <ul className="flex flex-col divide-y divide-line">
+          {archived.map((c) => (
+            <li key={c.id} className="flex items-center gap-3 py-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium">{c.name}</p>
+                <p className="text-xs text-fg-muted">{c.type === "workout" ? "Workouts" : "Todos"}</p>
+              </div>
+              <Button onClick={() => action.run(() => restoreCommitment(qc, c.id, nextOrder()))} disabled={action.busy}>Restore</Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <ErrorText error={action.error} />
+    </Card>
   );
 }

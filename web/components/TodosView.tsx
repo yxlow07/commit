@@ -1,19 +1,25 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Commitment } from "@/lib/domain/types";
 import { openItems, recurrenceLabel, todoItem, type TodoItem } from "@/lib/domain/recurrence";
 import { formatDue } from "@/lib/domain/due";
 import { useTable } from "@/lib/data/store";
-import { createTodo, deleteTodo, moveCommitment, setTodoDone, updateCommitment, updateTodo } from "@/lib/data/mutations";
+import { createTodo, deleteTodo, reorderCommitments, setTodoDone, updateTodo } from "@/lib/data/mutations";
+import { cssColor } from "@/lib/domain/format";
 import { CommitmentDialog } from "./CommitmentDialog";
+import { SortableList } from "./Sortable";
 import { TodoForm } from "./TodoForm";
+import { WorkoutRoutines } from "./WorkoutRoutines";
 import { Button, Card, Checkbox, ColorDot, Empty, ErrorText, IconButton, Icons, Spinner, useAction, useNow } from "./ui";
 
-/** Main view (F10.2): commitments on the left, the selected commitment's todos on the right. */
+/**
+ * Main view (F10.2): commitments on the left, the selected one on the right. As on the phone's
+ * Today, todo commitments and workout commitments are separate groups, each reordered by dragging;
+ * a workout commitment shows its routines here (there's no separate Workouts page).
+ */
 export function TodosView() {
   const commitmentsQ = useTable("commitments");
   const todosQ = useTable("todos");
@@ -22,7 +28,7 @@ export function TodosView() {
   const params = useSearchParams();
   const qc = useQueryClient();
   const [dialog, setDialog] = useState<{ open: boolean; commitment: Commitment | null }>({ open: false, commitment: null });
-  const archive = useAction();
+  const reorder = useAction();
 
   const commitments = useMemo(
     () => (commitmentsQ.data ?? []).filter((c) => !c.archived).sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name)),
@@ -36,6 +42,37 @@ export function TodosView() {
   if (commitmentsQ.error || todosQ.error) return <ErrorText error={commitmentsQ.error ?? todosQ.error} />;
 
   const openCount = (c: Commitment) => openItems(todos.filter((t) => t.commitment_id === c.id), now).length;
+  const todoGroup = commitments.filter((c) => c.type !== "workout");
+  const workoutGroup = commitments.filter((c) => c.type === "workout");
+  // A group's new order, written back into the slots its members held in the full list.
+  const saveGroup = (groupIds: string[]) => {
+    const members = new Set(groupIds);
+    const next = groupIds[Symbol.iterator]();
+    const full = commitments.map((c) => (members.has(c.id) ? next.next().value! : c.id));
+    reorder.run(() => reorderCommitments(qc, commitments, full));
+  };
+
+  const group = (list: Commitment[]) => (
+    <SortableList
+      items={list}
+      getId={(c) => c.id}
+      getLabel={(c) => c.name}
+      onReorder={saveGroup}
+      className="flex flex-col gap-0.5"
+      renderItem={(c, handle) => (
+        <div className={`group flex items-center gap-1 rounded-xl py-1 pl-0.5 pr-1 ${c.id === selected?.id ? "bg-primary-soft" : "hover:bg-surface-2"}`}>
+          {handle}
+          <button type="button" onClick={() => select(c.id)} className="flex min-w-0 flex-1 items-center gap-2 py-0.5 text-left text-sm">
+            <span className="truncate">{c.name}</span>
+            {c.type !== "workout" && (
+              <span className="ml-auto text-sm tabular-nums" style={{ color: cssColor(c.color) }}>{openCount(c)}</span>
+            )}
+          </button>
+          <IconButton label={`Edit ${c.name}`} className="opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100" onClick={() => setDialog({ open: true, commitment: c })}>{Icons.edit}</IconButton>
+        </div>
+      )}
+    />
+  );
 
   return (
     <div className="grid gap-6 md:grid-cols-[16rem_1fr]">
@@ -45,35 +82,21 @@ export function TodosView() {
           <IconButton label="New commitment" onClick={() => setDialog({ open: true, commitment: null })}>{Icons.plus}</IconButton>
         </div>
         {commitments.length === 0 && <p className="text-sm text-fg-muted">Add a commitment like Study or Work to get started.</p>}
-        {commitments.map((c, i) => (
-          <div
-            key={c.id}
-            className={`group flex items-center gap-2 rounded-xl px-2 py-1.5 ${c.id === selected?.id ? "bg-primary-soft" : "hover:bg-surface-2"}`}
-          >
-            <button type="button" onClick={() => select(c.id)} className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm">
-              <ColorDot color={c.color} />
-              <span className="truncate">{c.name}</span>
-              <span className="ml-auto text-xs text-fg-muted">{c.type === "workout" ? "Workout" : openCount(c) || ""}</span>
-            </button>
-            <div className="flex opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
-              <IconButton label={`Move ${c.name} up`} disabled={i === 0} onClick={() => moveCommitment(qc, commitments, c.id, -1)}>{Icons.up}</IconButton>
-              <IconButton label={`Move ${c.name} down`} disabled={i === commitments.length - 1} onClick={() => moveCommitment(qc, commitments, c.id, 1)}>{Icons.down}</IconButton>
-              <IconButton label={`Edit ${c.name}`} onClick={() => setDialog({ open: true, commitment: c })}>{Icons.edit}</IconButton>
-              <IconButton label={`Archive ${c.name}`} onClick={() => archive.run(() => updateCommitment(qc, c.id, { archived: 1 }))}>{Icons.archive}</IconButton>
-            </div>
-          </div>
-        ))}
-        <ErrorText error={archive.error} />
+        {group(todoGroup)}
+        {workoutGroup.length > 0 && (
+          <>
+            <h2 className="mb-1 mt-6 text-sm font-semibold text-fg-muted">Workouts</h2>
+            {group(workoutGroup)}
+          </>
+        )}
+        <ErrorText error={reorder.error} />
       </aside>
 
       <section className="min-w-0">
         {!selected ? (
           <Empty>Create a commitment to start adding todos.</Empty>
         ) : selected.type === "workout" ? (
-          <Card>
-            <h1 className="mb-2 flex items-center gap-2 text-xl font-semibold"><ColorDot color={selected.color} size={12} />{selected.name}</h1>
-            <p className="text-sm text-fg-muted">This is a workout commitment. Manage its routines on the <Link className="text-primary underline" href="/workouts">Workouts</Link> page.</p>
-          </Card>
+          <WorkoutRoutines commitment={selected} />
         ) : (
           <TodoList commitment={selected} commitments={commitments.filter((c) => c.type === "standard")} now={now} />
         )}
@@ -118,7 +141,7 @@ function TodoList({ commitment, commitments, now }: { commitment: Commitment; co
         />
       </Card>
       <ul className="flex flex-col divide-y divide-line rounded-2xl border border-line bg-surface">
-        {sortedOpen.length === 0 && <li><Empty>Nothing to do here.</Empty></li>}
+        {sortedOpen.length === 0 && <li><Empty>All done for {commitment.name}.</Empty></li>}
         {sortedOpen.map((item) => <TodoRow key={item.todo.id} item={item} commitments={commitments} now={now} />)}
       </ul>
       {done.length > 0 && (

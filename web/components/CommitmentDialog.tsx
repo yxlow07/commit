@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { Commitment, CommitmentType } from "@/lib/domain/types";
 import { PALETTE, cssColor } from "@/lib/domain/format";
 import { createCommitment, updateCommitment } from "@/lib/data/mutations";
-import { Button, ErrorText, Field, Input, Modal, useAction } from "./ui";
+import { Button, ErrorText, Field, IconButton, Icons, Input, Modal, useAction } from "./ui";
 
 /** Create (commitment = null) or edit a commitment (F1.1–F1.3). */
 export function CommitmentDialog({
@@ -72,7 +72,17 @@ function Form({ commitment, nextSortOrder, onDone, onCreated }: { commitment: Co
         </div>
       )}
       <ErrorText error={action.error} />
-      <div className="flex justify-end gap-2">
+      <div className="flex items-center justify-end gap-2">
+        {/* Archive bottom left, as on the phone; restore it from Settings > Archived. */}
+        {commitment && (
+          <IconButton
+            label={`Archive ${commitment.name}`}
+            className="mr-auto h-10 w-10 rounded-xl bg-surface-2"
+            onClick={async () => { if (await action.run(() => updateCommitment(qc, commitment.id, { archived: 1 }))) onDone(); }}
+          >
+            {Icons.archive}
+          </IconButton>
+        )}
         <Button variant="ghost" onClick={onDone}>Cancel</Button>
         <Button variant="primary" type="submit" disabled={!name.trim() || action.busy}>Save</Button>
       </div>

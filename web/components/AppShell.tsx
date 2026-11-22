@@ -67,7 +67,6 @@ function SignedIn({ userId, children }: { userId: string; children: ReactNode })
 
 const LINKS = [
   { href: "/", label: "Todos" },
-  { href: "/workouts", label: "Workouts" },
   { href: "/history", label: "History" },
   { href: "/settings", label: "Settings" },
 ];
@@ -75,7 +74,7 @@ const LINKS = [
 function Nav() {
   const path = usePathname();
   const active = (href: string) =>
-    href === "/" ? path === "/" : path.startsWith(href) || (href === "/workouts" && path.startsWith("/routine")) || (href === "/history" && path.startsWith("/session"));
+    href === "/" ? path === "/" || path.startsWith("/routine") : path.startsWith(href) || (href === "/history" && path.startsWith("/session"));
   return (
     <header className="sticky top-0 z-10 border-b border-line bg-bg/90 backdrop-blur">
       <nav className="mx-auto flex max-w-6xl items-center gap-1 overflow-x-auto px-4 py-2 sm:px-6">

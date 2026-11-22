@@ -700,3 +700,12 @@ Changed (2026-11-22), not yet verified on a device:
 
 ## App icon (2026-11-22)
 - Launcher icon is the heatmap grid from `heatmap-icon-android.zip`: adaptive icon with a `#F6F6F5` background colour (`values/ic_launcher_background.xml`), the 3 x 3 grey grid as the foreground, and a white-with-alpha monochrome layer for Android 13+ themed icons. Removed the template's robot background drawable and the unused `.webp` bitmaps (minSdk 31 always uses the adaptive icon). The 512 px Play Store PNG and SVG master are in `app/icon/`. Verified in the emulator's app drawer.
+
+## Web app brought in line with the phone (2026-11-22)
+- Main page sidebar: todo commitments and workout commitments in separate groups ("Commitments", "Workouts"), each reordered by dragging a grip handle (or arrow keys on the focused handle; `components/Sortable.tsx`, `reorderCommitments`), open counts in the commitment's colour, pencil to edit on hover. The hover ↑ / ↓ and archive buttons are gone.
+- Workouts merged into the main page: selecting a workout commitment shows its routines (`components/WorkoutRoutines.tsx`) with drag to reorder, "planned today", detail tinted by the commitment colour, and Add routine. The Workouts nav item is removed; `/workouts` redirects to `/`; the routine editor's back link returns to its commitment.
+- Routine editor: exercises reorder by drag; a row opens its editor, which now has the delete (trash) button; the separate edit / delete / ↑ / ↓ icons are gone.
+- Edit commitment dialog: Archive is an icon bottom left. Settings has an "Archived" card with Restore (back at the end of the list, `restoreCommitment`).
+- "All done for X." replaces "Nothing to do here."; History heatmap has a Less → More gradient legend; Settings recap hints shortened ("Today's plan", "Today's wins, tomorrow's plan") and the chore paragraph removed.
+- Favicon is the heatmap icon (`app/icon.svg`, from `app/icon/icon-master.svg`); the stock Next.js `favicon.ico` is removed.
+- `move*` (one step) mutations replaced by `reorder*` (save a whole order). tsc, eslint, 40 vitest tests and `next build` pass. Not yet seen in a browser: needs a signed-in session on a deployed build.

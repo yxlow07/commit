@@ -73,6 +73,12 @@ function TasksTab() {
           </div>
         </div>
         <Heatmap counts={perDay(byCommitment)} weeks={weeks} now={now} selected={day} onSelect={setDay} />
+        {/* Gradient legend, as on the phone: what the shades mean, without a sentence. */}
+        <div className="mt-2 flex items-center justify-end gap-2 text-xs text-fg-muted" aria-hidden>
+          Less
+          <span className="h-2 w-24 rounded-full" style={{ background: "linear-gradient(to right, var(--surface-2), color-mix(in srgb, var(--primary) 40%, transparent), var(--primary))" }} />
+          More
+        </div>
         {day != null && (
           <p className="mt-2 text-xs text-fg-muted">Showing {longDayFmt.format(day)} · <button className="text-primary underline" onClick={() => setDay(null)}>show all</button></p>
         )}
