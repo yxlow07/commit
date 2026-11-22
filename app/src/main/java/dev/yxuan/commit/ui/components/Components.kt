@@ -83,7 +83,7 @@ import dev.yxuan.commit.ui.theme.tnum
 
 // ---- Icons (thin strokes, drawn so they follow the tokens) ----
 
-enum class Glyph { Back, Chevron, Plus, Minus, Tick, Close, Trash, Pencil, Grip }
+enum class Glyph { Back, Chevron, Plus, Minus, Tick, Close, Trash, Pencil, Grip, Archive }
 
 @Composable
 fun GlyphIcon(glyph: Glyph, color: Color, size: Dp = 20.dp, stroke: Dp = 1.8.dp, modifier: Modifier = Modifier) {
@@ -108,6 +108,13 @@ fun GlyphIcon(glyph: Glyph, color: Color, size: Dp = 20.dp, stroke: Dp = 1.8.dp,
                 drawPath(p(6f to 6.5f, 7f to 20f, 17f to 20f, 18f to 6.5f), color, style = s)
                 drawLine(color, Offset(10 * w / 24, 10 * w / 24), Offset(10 * w / 24, 16.5f * w / 24), s.width, StrokeCap.Round)
                 drawLine(color, Offset(14 * w / 24, 10 * w / 24), Offset(14 * w / 24, 16.5f * w / 24), s.width, StrokeCap.Round)
+            }
+            Glyph.Archive -> {
+                // A box with a lid, and a down arrow going into it.
+                drawPath(p(3.5f to 4.5f, 20.5f to 4.5f, 20.5f to 8.5f, 3.5f to 8.5f).apply { close() }, color, style = s)
+                drawPath(p(5f to 8.5f, 5f to 19.5f, 19f to 19.5f, 19f to 8.5f), color, style = s)
+                drawLine(color, Offset(12 * w / 24, 11 * w / 24), Offset(12 * w / 24, 16.5f * w / 24), s.width, StrokeCap.Round)
+                drawPath(p(9.5f to 14f, 12f to 16.5f, 14.5f to 14f), color, style = s)
             }
             Glyph.Grip -> {
                 // Drag handle: two columns of three dots.
@@ -280,7 +287,15 @@ fun PrimaryRoundButton(onClick: () -> Unit, contentDescription: String, modifier
 
 /** Delete as an icon: a trash glyph on a light `fill` square (button radius), 44 dp. */
 @Composable
-fun DeleteIconButton(onClick: () -> Unit, contentDescription: String, modifier: Modifier = Modifier) {
+fun DeleteIconButton(onClick: () -> Unit, contentDescription: String, modifier: Modifier = Modifier) =
+    IconTileButton(Glyph.Trash, onClick, contentDescription, modifier)
+
+/**
+ * A secondary dialog action as an icon on a light `fill` square (button radius), 44 dp: trash,
+ * archive. It sits bottom left in a dialog's actions, away from Cancel / Save.
+ */
+@Composable
+fun IconTileButton(glyph: Glyph, onClick: () -> Unit, contentDescription: String, modifier: Modifier = Modifier) {
     val c = Commit.colors
     Box(
         modifier
@@ -291,7 +306,7 @@ fun DeleteIconButton(onClick: () -> Unit, contentDescription: String, modifier: 
             .semantics { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center,
     ) {
-        GlyphIcon(Glyph.Trash, c.muted, size = 20.dp, stroke = 1.6.dp)
+        GlyphIcon(glyph, c.muted, size = 20.dp, stroke = 1.6.dp)
     }
 }
 

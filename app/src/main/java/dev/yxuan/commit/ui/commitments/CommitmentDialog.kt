@@ -1,5 +1,8 @@
 package dev.yxuan.commit.ui.commitments
 
+import androidx.compose.foundation.layout.Spacer
+import dev.yxuan.commit.ui.components.Glyph
+import dev.yxuan.commit.ui.components.IconTileButton
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -80,6 +83,11 @@ fun CommitmentDialog(
         title = if (initial == null) "New commitment" else "Edit commitment",
         onDismiss = onDismiss,
         actions = {
+            // Archive bottom left, like the trash in the todo and exercise editors.
+            onArchive?.let {
+                IconTileButton(Glyph.Archive, onClick = it, contentDescription = "Archive ${initial?.name ?: "commitment"}")
+                Spacer(Modifier.weight(1f))
+            }
             TextAction("Cancel", onClick = onDismiss)
             PrimaryButton(
                 if (initial == null) "Add commitment" else "Save",
@@ -130,6 +138,5 @@ fun CommitmentDialog(
         if (initial != null && initial.type != CommitmentType.WORKOUT) {
             Text("To reorder, drag a commitment's handle on Today.", style = Commit.type.meta, color = c.muted)
         }
-        onArchive?.let { TextAction("Archive", onClick = it, muted = true, modifier = Modifier.offset(x = (-12).dp)) }
     }
 }

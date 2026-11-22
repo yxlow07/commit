@@ -686,3 +686,4 @@ Changed (2026-11-22), not yet verified on a device:
 
 ## Settings copy trimmed (2026-11-22)
 - Recap details shortened ("Today's plan", "Today's wins, tomorrow's plan"); the chore/skip paragraph and the sign-out explanation removed; "Account and sync" is "Account"; the signed-out and not-configured lines are one short sentence each. Verified on the emulator.
+- Edit commitment / edit workout dialog: Archive is an icon (`Glyph.Archive`, box with a down arrow) on a `fill` tile, bottom left of the actions like the trash in the todo and exercise editors (`IconTileButton`, which `DeleteIconButton` now wraps). Verified on the emulator in dark mode.
