@@ -1,5 +1,6 @@
 package dev.yxuan.commit.ui.workout
 
+import dev.yxuan.commit.ui.components.Stepper
 import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.width
@@ -209,16 +210,16 @@ private fun describe(ex: ExerciseEntity): String {
 }
 
 /**
- * New / edit exercise, laid out like the todo editor: labelled fields, a segmented control for the
- * kind (reps or timed), numbers on centred scroll wheels with their units, and trash / Cancel /
- * Save exercise.
+ * New / edit exercise, laid out like the todo editor: name, a segmented control for the kind,
+ * then the numbers as the live workout's steppers in a 2 x 2 grid (compact, one tap per step), and
+ * trash / Cancel / Save exercise.
  */
 @Composable
 private fun ExerciseDialog(initial: ExerciseEntity?, onDismiss: () -> Unit, onDelete: (() -> Unit)?, onSave: (ExerciseInput) -> Unit) {
     var name by rememberSaveable { mutableStateOf(initial?.name ?: "") }
     var sets by rememberSaveable { mutableIntStateOf(initial?.sets ?: 3) }
     var reps by rememberSaveable { mutableIntStateOf(initial?.reps?.takeIf { it > 0 } ?: 8) }
-    // Weight in tenths of a kilogram, so 62.5 kg is a whole step on the wheel.
+    // Weight in tenths of a kilogram, so 2.5 kg steps stay exact.
     var weightTenths by rememberSaveable { mutableIntStateOf(((initial?.weight ?: 0.0) * 10).roundToInt()) }
     var rest by rememberSaveable { mutableIntStateOf(initial?.restSeconds ?: 90) }
     var timed by rememberSaveable { mutableStateOf((initial?.durationSeconds ?: 0) > 0) }
@@ -249,60 +250,28 @@ private fun ExerciseDialog(initial: ExerciseEntity?, onDismiss: () -> Unit, onDe
         },
     ) {
         CommitTextField(name, { name = it }, label = "Name", keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences))
-        Column {
-            FieldLabel("Kind")
-            SegmentedControl(listOf(false, true), timed, { timed = it }, label = { if (it) "Timed, like a plank" else "Sets and reps" })
+        SegmentedControl(listOf(false, true), timed, { timed = it }, label = { if (it) "Timed" else "Sets and reps" })
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.l)) {
+            Stepper(sets.toString(), if (sets == 1) "set" else "sets", { sets = (sets - 1).coerceAtLeast(1) }, { sets = (sets + 1).coerceAtMost(99) }, "Fewer sets", "More sets", Modifier.weight(1f))
+            if (timed) Stepper(duration.toString(), "seconds", { duration = stepDown(duration, 5, 5) }, { duration = stepUp(duration, 5, 3600) }, "Shorter", "Longer", Modifier.weight(1f))
+            else Stepper(reps.toString(), "reps", { reps = (reps - 1).coerceAtLeast(1) }, { reps = (reps + 1).coerceAtMost(999) }, "Fewer reps", "More reps", Modifier.weight(1f))
         }
-        Column {
-            FieldLabel(if (timed) "Sets and time" else "Sets and reps")
-            WheelBand(if (timed) 240.dp else 220.dp) {
-                WheelPicker(stepped(1..10, 1, sets), sets, { sets = it }, label = { it.toString() }, contentDescription = "Sets", visibleRows = 3, showBand = false, width = 56.dp)
-                BandText("×")
-                if (timed) {
-                    WheelPicker(stepped(5..600, 5, duration), duration, { duration = it }, label = { it.toString() }, contentDescription = "Seconds per set", visibleRows = 3, showBand = false, width = 72.dp)
-                    BandText("seconds")
-                } else {
-                    WheelPicker(stepped(1..50, 1, reps), reps, { reps = it }, label = { it.toString() }, contentDescription = "Reps", visibleRows = 3, showBand = false, width = 56.dp)
-                    BandText("reps")
-                }
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.l)) {
+            if (!timed) {
+                // TODO(human): choose the weight step. Now 2.5 kg (tenths of a kg, so 25 = 2.5 kg).
+                val weightStep = 25
+                Stepper(WorkoutFormat.weightValue(weightTenths / 10.0), "kg", { weightTenths = stepDown(weightTenths, weightStep, 0) }, { weightTenths = stepUp(weightTenths, weightStep, 9990) }, "Less weight", "More weight", Modifier.weight(1f))
             }
-        }
-        if (!timed) {
-            Column {
-                FieldLabel("Weight")
-                WheelBand(160.dp) {
-                    WheelPicker(stepped(0..3000, 25, weightTenths), weightTenths, { weightTenths = it }, label = { WorkoutFormat.weightValue(it / 10.0) }, contentDescription = "Weight in kilograms", visibleRows = 3, showBand = false, width = 80.dp)
-                    BandText("kg")
-                }
-            }
-        }
-        Column {
-            FieldLabel("Rest between sets")
-            WheelBand(200.dp) {
-                WheelPicker(stepped(0..600, 15, rest), rest, { rest = it }, label = { it.toString() }, contentDescription = "Rest in seconds", visibleRows = 3, showBand = false, width = 72.dp)
-                BandText("seconds")
-            }
+            Stepper(rest.toString(), "s rest", { rest = stepDown(rest, 15, 0) }, { rest = stepUp(rest, 15, 3600) }, "Shorter rest", "Longer rest", Modifier.weight(1f))
         }
     }
 }
 
-/** Wheels and their unit words in a row, centred, over one band (as the todo editor's interval). */
-@Composable
-private fun WheelBand(bandWidth: Dp, content: @Composable RowScope.() -> Unit) {
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        Box(Modifier.width(bandWidth).height(36.dp).background(Commit.colors.fill, RoundedCornerShape(10.dp)))
-        Row(verticalAlignment = Alignment.CenterVertically, content = content)
-    }
-}
+/** The next multiple of [step] above [v] (so an older in-between value snaps onto the grid), at most [max]. */
+private fun stepUp(v: Int, step: Int, max: Int) = ((v / step + 1) * step).coerceAtMost(max)
 
-@Composable
-private fun BandText(text: String) {
-    Text(text, style = Commit.type.body, color = Commit.colors.ink, modifier = Modifier.padding(horizontal = 4.dp))
-}
-
-/** [range] in steps of [step], plus [include] if it falls between steps (an older value). */
-private fun stepped(range: IntRange, step: Int, include: Int): List<Int> =
-    (range step step).toMutableList().apply { if (include !in this) { add(include); sort() } }
+/** The next multiple of [step] below [v], at least [min]. */
+private fun stepDown(v: Int, step: Int, min: Int) = (if (v % step == 0) v - step else v / step * step).coerceAtLeast(min)
 
 @Composable
 private fun NumberField(label: String, value: String, onChange: (String) -> Unit, modifier: Modifier = Modifier, decimal: Boolean = false) {
