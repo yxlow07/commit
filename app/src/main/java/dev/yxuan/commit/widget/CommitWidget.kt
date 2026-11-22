@@ -252,8 +252,8 @@ private fun TabRow(tabs: List<CommitmentEntity>, selected: CommitmentEntity) {
                 ) {
                     Text(tab.name, maxLines = 1, style = TextStyle(color = c.ink, fontSize = bigSize, fontFamily = WidgetLight))
                     Spacer(GlanceModifier.height(3.dp))
-                    // A short dash centred under the name, in the lightest grey: a hint, not a highlight.
-                    Box(GlanceModifier.width(18.dp).height(2.dp).cornerRadius(1.dp).background(c.track)) {}
+                    // A short dash centred under the name, a faint tint of the text: a hint, not a highlight.
+                    Box(GlanceModifier.width(18.dp).height(2.dp).cornerRadius(1.dp).background(c.tabDash)) {}
                 }
             } else {
                 // Unselected: light grey, regular weight.

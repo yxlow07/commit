@@ -31,6 +31,11 @@ data class WidgetColors(
      * behind them (the launcher draws them), so this is see-through rather than frosted.
      */
     val panel: ColorProvider,
+    /**
+     * The selected tab's dash: `ink` at 22 %. A tint of the text colour stays visible whatever shows
+     * through the see-through panel; the solid `track` grey matched the panel over light wallpaper.
+     */
+    val tabDash: ColorProvider,
 ) {
     companion object {
         fun of(theme: ActiveTheme): WidgetColors {
@@ -46,6 +51,7 @@ data class WidgetColors(
                 danger = p { it.danger },
                 tabIdle = p { it.faint },
                 panel = ColorProvider(day = Color(day.surface).copy(alpha = 0.72f), night = Color(night.surface).copy(alpha = 0.72f)),
+                tabDash = ColorProvider(day = Color(day.ink).copy(alpha = 0.22f), night = Color(night.ink).copy(alpha = 0.3f)),
             )
         }
 
