@@ -49,6 +49,7 @@ import dev.yxuan.commit.ui.components.PushedTopBar
 import dev.yxuan.commit.ui.components.ScreenTitle
 import dev.yxuan.commit.ui.components.SectionHeading
 import dev.yxuan.commit.ui.components.TextAction
+import dev.yxuan.commit.ui.components.WeekdayToggles
 import dev.yxuan.commit.ui.format.WorkoutFormat
 import dev.yxuan.commit.ui.theme.Commit
 import dev.yxuan.commit.ui.theme.Space
@@ -152,28 +153,12 @@ fun RoutineEditorScreen(
     }
 }
 
-/** Weekday text toggles: the days this routine is planned, shown on Today and in the morning recap. */
+/** The days this routine is planned, shown on Today and in the morning recap. */
 @Composable
 private fun PlannedDays(mask: Int, onChange: (Int) -> Unit) {
-    val c = Commit.colors
     Column {
         FieldLabel("Planned days")
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            DayOfWeek.entries.forEach { day ->
-                val on = Weekdays.contains(mask, day)
-                val label = day.getDisplayName(TextStyle.SHORT, Locale.getDefault())
-                Text(
-                    label,
-                    style = Commit.type.label.copy(fontWeight = if (on) FontWeight.Bold else FontWeight.Normal),
-                    color = if (on) c.ink else c.muted,
-                    modifier = Modifier
-                        .heightIn(min = 44.dp)
-                        .clickable(role = Role.Checkbox) { onChange(Weekdays.toggle(mask, day)) }
-                        .padding(horizontal = 4.dp, vertical = 12.dp)
-                        .semantics { contentDescription = "$label, " + if (on) "planned" else "not planned" },
-                )
-            }
-        }
+        WeekdayToggles(mask, onChange)
     }
 }
 
@@ -241,5 +226,6 @@ private fun NumberField(label: String, value: String, onChange: (String) -> Unit
         label = label,
         keyboardOptions = KeyboardOptions(keyboardType = if (decimal) KeyboardType.Decimal else KeyboardType.Number),
         modifier = modifier,
+        centered = true,
     )
 }

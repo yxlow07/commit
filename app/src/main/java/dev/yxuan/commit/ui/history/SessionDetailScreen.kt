@@ -103,9 +103,9 @@ fun SessionDetailScreen(onBack: () -> Unit, viewModel: SessionDetailViewModel = 
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 CommitTextField(reps, { v -> reps = v.filter(Char::isDigit).take(4) }, label = "Reps",
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f), centered = true)
                 CommitTextField(weight, { v -> weight = v.filter { it.isDigit() || it == '.' || it == ',' }.take(6) }, label = "Weight, kg",
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f), centered = true)
             }
         }
     }

@@ -139,6 +139,9 @@ Track: `fill`, radius 14, 3 dp padding. Segments: 42 dp tall, radius 11, `label`
 
 ### Text field
 
+Number-only fields (sets, reps, weight, rest) centre their text; free text stays left-aligned.
+
+
 `fill` background, no border, 48 dp tall, radius 12, 14 dp horizontal padding, `body` text. Label above it in `caption`, `muted`. Focus: 2 dp `ink` outline.
 
 ### Section heading
@@ -263,8 +266,8 @@ A translucent activity themed as a dialog, opened by the widget's add button and
 - Surface `surface`, radius 28, 20 dp side padding, 24 dp top, 20 dp gap between groups. Scrim `scrim`.
 - Title field gets focus on open. Save is disabled until the title has a character.
 - Commitment defaults to the tab the widget was showing. Gym is not offered (workouts are planned in the app).
-- Due: tapping the date opens the system date picker, tapping the time opens the time picker. The time button reads "Add time" in `muted` until set. "No date" clears both.
-- Repeat: a checkbox (the sentence ticks it too). Unticked, the sentence reads "Repeat every **x** days after I finish it" with a bold, `muted` x. Ticking shows a centred scroll wheel (1–365, starting at 1) with one selection band behind the number and "days"; the number in the sentence turns bold `ink`.
+- Due: tapping the date opens the system date picker, tapping the time opens the time picker: hour and minute scroll wheels under one band (24-hour). The date and time boxes centre their text; the time button reads "Add time" in `muted` until set. "No date" clears both.
+- Repeat: a labelled field like the others. A checkbox with a summary ("Repeat every **4** days after I finish it", "Repeat on **Mon, Thu**"; before picking, a bold `muted` x), which also ticks it. Once ticked: in the editor the mode as a segmented control ("After I finish it" / "On weekdays"), then that mode's picker: a centred 3-row scroll wheel of days (1–365, starting at 1), or seven weekday toggle buttons (selected `ink` / `onInk`, others `fill`).
 - Save closes the popup, writes to Room, and the widget redraws with the new row. Cancel or tapping the scrim closes without saving. Back does the same.
 
 ## App screens

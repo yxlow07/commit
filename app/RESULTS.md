@@ -627,3 +627,10 @@ Fixed (2026-11-22): **"Push Day today" with no workouts.** Routines of archived 
 Changed (2026-11-22): History heatmap legend. The sentence "Each square is a day…" is replaced by "N this week" and a Less-to-More gradient bar through the heatmap shades (TalkBack still reads the count and what the shades mean).
 
 Changed (2026-11-22): **Widget todo tap opens a small edit popup** over the home screen instead of the full app: the quick-add popup in edit mode (prefilled, full fields including weekday repeat and reminder lead time, "Delete todo"; no keyboard until you tap a field). A later "Add" starts empty. Checked on the emulator: edit "M10 weekday chore" from the widget (Mon, Thu shown), Save returns to the home screen; Add opens a fresh popup.
+
+Changed (2026-11-22), todo editing:
+- **Repeat section hierarchy:** "Repeat" label like the other fields; checkbox + summary ("Repeat on **Mon, Thu**"); mode as a segmented control; then the picker, in the same order for both modes. Weekdays are toggle buttons (`WeekdayToggles`, also used for a routine's planned days). The wheel shows 3 rows (5 left an empty gap above small values).
+- **Time picker:** built from the wheel: hour and minute wheels under one band (`TimeWheels`), replacing the Material clock for todo times and recap times.
+- **Dialogs dim what's behind** even when opened from the popup (whose window has dimming off), so the time dialog no longer blends into it.
+- **Centred box contents:** date and time boxes, number-only fields (routine editor, session edit).
+Checked on the emulator in the widget's edit popup (weekday mode, interval mode, time picker).

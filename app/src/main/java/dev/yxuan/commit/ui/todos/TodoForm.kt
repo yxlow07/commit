@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -54,6 +55,7 @@ import dev.yxuan.commit.ui.components.SegmentedControl
 import dev.yxuan.commit.ui.components.TextAction
 import dev.yxuan.commit.ui.components.TextTabs
 import dev.yxuan.commit.ui.components.TimePickerSheet
+import dev.yxuan.commit.ui.components.WeekdayToggles
 import dev.yxuan.commit.ui.components.WheelPicker
 import dev.yxuan.commit.ui.format.DueLabels
 import dev.yxuan.commit.ui.theme.Commit
@@ -176,8 +178,9 @@ private fun LeadField(lead: Int?, onChange: (Int?) -> Unit) {
 }
 
 /**
- * "Repeat every 4 days after I finish it" with the interval on a scroll wheel (F4.2). The editor
- * also offers fixed weekdays (F4.3).
+ * Repeat (F4.2, F4.3), laid out like the other fields: a "Repeat" label, a checkbox with a summary
+ * ("Repeat every 4 days after I finish it" / "Repeat on Mon, Thu"), then, once ticked, the mode as a
+ * segmented control (editor only) and that mode's picker: a scroll wheel of days, or weekday toggles.
  */
 @Composable
 private fun RepeatField(
@@ -189,109 +192,82 @@ private fun RepeatField(
 ) {
     val c = Commit.colors
     val repeating = repeatDays != null || (recurDays ?: 0) > 0
-    // Nothing picked yet: the sentence shows "x". Ticking starts the wheel at 1; the last pick is
+    // Nothing picked yet: the summary shows "x". Ticking starts the wheel at 1; the last pick is
     // remembered while unticked.
     var picked by rememberSaveable { mutableStateOf(repeatDays) }
     if (repeatDays != null && repeatDays != picked) picked = repeatDays
     val days = picked ?: 1
     val weekdays = (recurDays ?: 0) > 0
+    val toggle = {
+        if (repeating) { onRepeatChange(null); onRecurDaysChange(null) } else onRepeatChange(days)
+    }
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column {
+        FieldLabel("Repeat")
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.heightIn(min = 44.dp)) {
-            CommitCheckbox(
-                checked = repeating,
-                onCheckedChange = { on ->
-                    if (on) onRepeatChange(days)
-                    else { onRepeatChange(null); onRecurDaysChange(null) }
-                },
-                title = "Repeat",
-                modifier = Modifier.padding(end = 4.dp),
-            )
-            // The sentence ticks the box too. The number is bold; before anything is picked it's a
-            // muted bold "x".
-            val sentence = buildAnnotatedString {
+            CommitCheckbox(checked = repeating, onCheckedChange = { toggle() }, title = "Repeat", modifier = Modifier.offset(x = (-11).dp))
+            // The summary ticks the box too. Values are bold; before anything is picked, a muted "x".
+            val bold = SpanStyle(fontWeight = FontWeight.Bold, color = if (repeating) c.ink else c.muted)
+            val summary = buildAnnotatedString {
                 if (repeating && weekdays) {
-                    append("Repeat on fixed weekdays")
+                    append("Repeat on ")
+                    withStyle(bold) { append(Weekdays.label(recurDays ?: 0)) }
                 } else {
                     append("Repeat every ")
                     val number = if (repeating) days.toString() else picked?.toString() ?: "x"
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = if (repeating) c.ink else c.muted)) { append(number) }
+                    withStyle(bold) { append(number) }
                     append(if (number == "1") " day after I finish it" else " days after I finish it")
                 }
             }
             Text(
-                sentence,
+                summary,
                 style = Commit.type.body.tnum(),
                 color = c.ink,
-                modifier = Modifier.clickable(
+                modifier = Modifier.offset(x = (-11).dp).clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                ) {
-                    if (repeating) { onRepeatChange(null); onRecurDaysChange(null) } else onRepeatChange(days)
-                },
+                    onClick = toggle,
+                ),
             )
         }
-        // The interval on a scroll wheel, once ticked (F4.2).
-        if (repeating && !weekdays) {
-            // Centred in the form, with one selection band behind the number and its unit, as on iOS.
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Box(Modifier.width(160.dp).height(36.dp).background(c.fill, RoundedCornerShape(10.dp)))
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    WheelPicker(
-                        values = REPEAT_DAY_RANGE,
-                        value = days,
-                        onValueChange = { picked = it; onRepeatChange(it) },
-                        label = { it.toString() },
-                        contentDescription = "Days between repeats",
-                        visibleRows = if (compact) 3 else 5,
-                        showBand = false,
+        if (repeating) {
+            Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                if (!compact) {
+                    SegmentedControl(
+                        options = listOf(false, true),
+                        selected = weekdays,
+                        onSelect = { onWeekdays ->
+                            if (!onWeekdays) { onRecurDaysChange(null); onRepeatChange(days) }
+                            else { onRepeatChange(null); onRecurDaysChange(recurDays?.takeIf { it > 0 } ?: 1) }
+                        },
+                        label = { if (it) "On weekdays" else "After I finish it" },
                     )
-                    // Fixed width, so the number stays centred in the band as "day" / "days" changes.
-                    Text(if (days == 1) "day" else "days", style = Commit.type.body, color = c.ink, modifier = Modifier.width(44.dp))
+                }
+                if (weekdays) {
+                    WeekdayToggles(recurDays ?: 0, { onRecurDaysChange(it) }, keepOne = true)
+                } else {
+                    // Centred, with one selection band behind the number and its unit, as on iOS.
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Box(Modifier.width(160.dp).height(36.dp).background(c.fill, RoundedCornerShape(10.dp)))
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            WheelPicker(
+                                values = REPEAT_DAY_RANGE,
+                                value = days,
+                                onValueChange = { picked = it; onRepeatChange(it) },
+                                label = { it.toString() },
+                                contentDescription = "Days between repeats",
+                                visibleRows = 3, // 5 rows left an empty gap above small values
+                                showBand = false,
+                            )
+                            // Fixed width, so the number stays centred in the band as "day" / "days" changes.
+                            Text(if (days == 1) "day" else "days", style = Commit.type.body, color = c.ink, modifier = Modifier.width(44.dp))
+                        }
+                    }
                 }
             }
-        }
-        if (repeating && !compact) {
-            TextTabs(
-                items = listOf("After I finish it", "On weekdays"),
-                selected = if (weekdays) 1 else 0,
-                onSelect = { i ->
-                    if (i == 0) { onRecurDaysChange(null); onRepeatChange(days) }
-                    else { onRepeatChange(null); onRecurDaysChange(recurDays?.takeIf { it > 0 } ?: 1) }
-                },
-                modifier = Modifier.padding(start = 44.dp),
-                style = Commit.type.label,
-                gap = 18.dp,
-            )
-            if (weekdays) WeekdayPicker(recurDays ?: 0, onRecurDaysChange)
         }
     }
 }
 
 /** Every day up to a year. */
 private val REPEAT_DAY_RANGE = (1..365).toList()
-
-/** Mon…Sun as text toggles: selected Bold `ink`. At least one day stays selected. */
-@Composable
-private fun WeekdayPicker(mask: Int, onChange: (Int?) -> Unit) {
-    val c = Commit.colors
-    Row(Modifier.fillMaxWidth().padding(start = 44.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        DayOfWeek.entries.forEach { day ->
-            val on = Weekdays.contains(mask, day)
-            val name = day.getDisplayName(TextStyle.SHORT, Locale.getDefault())
-            Text(
-                name,
-                style = Commit.type.label.copy(fontWeight = if (on) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal),
-                color = if (on) c.ink else c.muted,
-                modifier = Modifier
-                    .heightIn(min = 44.dp)
-                    .clickable(role = Role.Checkbox) {
-                        val next = Weekdays.toggle(mask, day)
-                        if (next > 0) onChange(next)
-                    }
-                    .padding(horizontal = 4.dp, vertical = 12.dp)
-                    .semantics { contentDescription = "$name, " + if (on) "selected" else "not selected" },
-            )
-        }
-    }
-}

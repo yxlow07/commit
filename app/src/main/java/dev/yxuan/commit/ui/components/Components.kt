@@ -58,6 +58,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -406,6 +407,8 @@ fun CommitTextField(
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     singleLine: Boolean = true,
     textStyle: TextStyle? = null,
+    /** Centre the text in the box (number-only fields); free text stays left-aligned. */
+    centered: Boolean = false,
 ) {
     val c = Commit.colors
     val interaction = remember { MutableInteractionSource() }
@@ -416,7 +419,7 @@ fun CommitTextField(
             value = value,
             onValueChange = onValueChange,
             singleLine = singleLine,
-            textStyle = (textStyle ?: Commit.type.body).copy(color = c.ink),
+            textStyle = (textStyle ?: Commit.type.body).copy(color = c.ink, textAlign = if (centered) TextAlign.Center else TextAlign.Start),
             cursorBrush = SolidColor(c.ink),
             keyboardOptions = keyboardOptions,
             keyboardActions = keyboardActions,
@@ -431,7 +434,7 @@ fun CommitTextField(
                         .background(c.fill)
                         .then(if (focused) Modifier.border(2.dp, c.ink, RoundedCornerShape(Commit.shapes.field)) else Modifier)
                         .padding(horizontal = 14.dp, vertical = 12.dp),
-                    contentAlignment = Alignment.CenterStart,
+                    contentAlignment = if (centered) Alignment.Center else Alignment.CenterStart,
                 ) {
                     if (value.isEmpty() && placeholder != null) Text(placeholder, style = Commit.type.body, color = c.muted)
                     inner()
@@ -452,7 +455,7 @@ fun FieldButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier
             .background(c.fill)
             .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 14.dp),
-        contentAlignment = Alignment.CenterStart,
+        contentAlignment = Alignment.Center, // contents centred in the box
     ) {
         Text(text, style = Commit.type.body.tnum(), color = if (placeholder) c.muted else c.ink, maxLines = 1)
     }

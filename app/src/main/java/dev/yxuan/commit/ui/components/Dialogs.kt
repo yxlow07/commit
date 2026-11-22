@@ -15,9 +15,7 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
-import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,12 +23,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import android.view.WindowManager
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.window.DialogProperties
 import dev.yxuan.commit.ui.theme.Commit
 import java.time.Instant
 import java.time.LocalDate
-import java.time.LocalTime
 import java.time.ZoneOffset
 
 /** Dialog panel: `surface`, the theme's panel radius, 20 dp sides, 24 dp top, 20 dp between groups. */
@@ -42,6 +43,13 @@ fun CommitDialog(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        // Always dim what's behind, also when opened from a popup whose window turns dimming off
+        // (the quick-add theme), so a dialog never blends into the panel under it.
+        val window = (LocalView.current.parent as? DialogWindowProvider)?.window
+        SideEffect {
+            window?.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            window?.setDimAmount(0.45f)
+        }
         DialogPanel(title = title, actions = actions, modifier = Modifier.padding(horizontal = 16.dp), content = content)
     }
 }
@@ -91,25 +99,5 @@ fun DatePickerSheet(initial: LocalDate?, onPick: (LocalDate) -> Unit, onDismiss:
         dismissButton = { TextAction("Cancel", onClick = onDismiss, muted = true) },
     ) {
         DatePicker(state = state)
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun TimePickerSheet(initial: LocalTime?, onPick: (LocalTime) -> Unit, onDismiss: () -> Unit) {
-    val start = initial ?: LocalTime.of(9, 0)
-    val state = rememberTimePickerState(initialHour = start.hour, initialMinute = start.minute, is24Hour = true)
-    CommitDialog(
-        title = "Time",
-        onDismiss = onDismiss,
-        actions = {
-            TextAction("Cancel", onClick = onDismiss, muted = true)
-            PrimaryButton("Set time", onClick = {
-                onPick(LocalTime.of(state.hour, state.minute))
-                onDismiss()
-            })
-        },
-    ) {
-        TimePicker(state = state, modifier = Modifier.align(Alignment.CenterHorizontally))
     }
 }
