@@ -218,7 +218,7 @@ internal fun tabWindow(widths: List<Float>, selected: Int, available: Float, gap
 }
 
 /**
- * One row of names: selected 30 sp light `ink`, others 15 sp medium `muted`, bottoms aligned (small
+ * One row of names: selected 30 sp light `ink`, others 15 sp regular in a lighter grey, bottoms aligned (small
  * tabs get 4 dp so their baselines meet). It behaves like a scrolled strip ([tabWindow]): tapping a
  * tab further along selects it and the row slides to it. On a narrow widget the selected tab drops
  * to 24 sp.
@@ -243,7 +243,8 @@ private fun TabRow(tabs: List<CommitmentEntity>, selected: CommitmentEntity) {
                 tab.name,
                 maxLines = 1,
                 style = if (on) TextStyle(color = c.ink, fontSize = bigSize, fontFamily = WidgetLight)
-                else TextStyle(color = c.muted, fontSize = 15.sp, fontWeight = FontWeight.Medium),
+                // Unselected: lighter grey, regular weight, so the selected tab clearly leads.
+                else TextStyle(color = c.tabIdle, fontSize = 15.sp, fontWeight = FontWeight.Normal),
                 modifier = GlanceModifier
                     .let { if (slot.partial) it.width(slot.width.dp) else it }
                     .padding(top = tabPad, bottom = if (on) tabPad else tabPad + 4.dp)

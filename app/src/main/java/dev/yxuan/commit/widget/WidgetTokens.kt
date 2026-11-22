@@ -2,6 +2,7 @@ package dev.yxuan.commit.widget
 
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.glance.color.ColorProvider
 import androidx.glance.text.FontFamily
 import androidx.glance.unit.ColorProvider
@@ -24,6 +25,8 @@ data class WidgetColors(
     val fill: ColorProvider,
     val surface: ColorProvider,
     val danger: ColorProvider,
+    /** Unselected tabs: halfway between muted and faint, so the selected tab stands out. */
+    val tabIdle: ColorProvider,
 ) {
     companion object {
         fun of(theme: ActiveTheme): WidgetColors {
@@ -37,8 +40,11 @@ data class WidgetColors(
                 ink = p { it.ink }, onInk = p { it.onInk }, textStrong = p { it.textStrong }, muted = p { it.muted },
                 faint = p { it.faint }, track = p { it.track }, fill = p { it.fill }, surface = p { it.surface },
                 danger = p { it.danger },
+                tabIdle = ColorProvider(day = idle(day), night = idle(night)),
             )
         }
+
+        private fun idle(t: ThemeColors) = lerp(Color(t.muted), Color(t.faint), 0.5f)
 
         val Default = of(ActiveTheme.Default)
     }
