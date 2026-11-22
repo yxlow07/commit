@@ -697,3 +697,6 @@ Changed (2026-11-22), not yet verified on a device:
 - The button that ends a rest says "Next exercise" after an exercise's last set, "Next set" otherwise (`LiveWorkout.nextLabel`), in the app, widget and notification. Covered by `restButtonSaysNextExerciseAfterTheLastSet`.
 - Exercise position reads "Push Day, 2nd exercise" instead of "Push Day, 2 of 2" (`WorkoutFormat.ordinal`, with 11th–13th handled; `WorkoutFormatTest`), in the app and widget. Verified on the widget.
 - Widget finished-workout panel: "Open summary" (which opened the app's live screen showing the same "Workout done" summary, only bigger) is now "See sets", opening that session's page in History with every set (`MainActivity.EXTRA_OPEN_SESSION` → `SessionDetailRoute`). The link was verified on the emulator by opening the latest session through it.
+
+## App icon (2026-11-22)
+- Launcher icon is the heatmap grid from `heatmap-icon-android.zip`: adaptive icon with a `#F6F6F5` background colour (`values/ic_launcher_background.xml`), the 3 x 3 grey grid as the foreground, and a white-with-alpha monochrome layer for Android 13+ themed icons. Removed the template's robot background drawable and the unused `.webp` bitmaps (minSdk 31 always uses the adaptive icon). The 512 px Play Store PNG and SVG master are in `app/icon/`. Verified in the emulator's app drawer.
