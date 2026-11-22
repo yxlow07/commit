@@ -1,5 +1,7 @@
 package dev.yxuan.commit.ui.workout
 
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -75,7 +77,8 @@ private fun LiveContent(live: LiveWorkout, vm: LiveWorkoutViewModel, onFinished:
     val ex = live.exercise ?: return
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
         Text(ex.name, style = t.bodyL.copy(fontWeight = FontWeight.Bold), color = c.ink, modifier = Modifier.weight(1f))
-        Text(WorkoutFormat.position(live), style = t.caption, color = c.muted)
+        Text(WorkoutFormat.position(live) + ", ", style = t.caption, color = c.muted)
+        ElapsedText(live.startedAt)
     }
     SetProgress(s.setNo, ex.sets)
     Spacer(Modifier.height(Space.s))
@@ -132,4 +135,18 @@ private fun Countdown(endsAt: Long) {
         textAlign = TextAlign.Center,
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+/** Time since the workout started ("04:05", "1:02:40", as the widget's Chronometer shows it), ticking every second. */
+@Composable
+private fun ElapsedText(startedAt: Long) {
+    val now by produceState(System.currentTimeMillis(), startedAt) {
+        while (true) {
+            value = System.currentTimeMillis()
+            delay(1_000 - value % 1_000)
+        }
+    }
+    val total = ((now - startedAt) / 1000).coerceAtLeast(0)
+    val text = if (total >= 3600) "%d:%02d:%02d".format(total / 3600, total / 60 % 60, total % 60) else "%02d:%02d".format(total / 60, total % 60)
+    Text(text, style = Commit.type.caption.tnum(), color = Commit.colors.muted, modifier = Modifier.semantics { contentDescription = "Workout time $text" })
 }

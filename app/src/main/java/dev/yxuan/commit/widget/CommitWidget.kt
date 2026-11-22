@@ -246,7 +246,7 @@ private fun TabRow(tabs: List<CommitmentEntity>, selected: CommitmentEntity) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = GlanceModifier
-                        .padding(top = tabPad, bottom = (tabPad - 5.dp).coerceAtLeast(0.dp))
+                        .padding(top = 2.dp, bottom = (tabPad - 5.dp).coerceAtLeast(0.dp))
                         .clickable(tap)
                         .semantics { contentDescription = tab.name + ", selected tab" },
                 ) {
@@ -263,7 +263,7 @@ private fun TabRow(tabs: List<CommitmentEntity>, selected: CommitmentEntity) {
                     style = TextStyle(color = c.tabIdle, fontSize = 15.sp, fontWeight = FontWeight.Normal),
                     modifier = GlanceModifier
                         .let { if (slot.partial) it.width(slot.width.dp) else it }
-                        .padding(top = tabPad, bottom = tabPad + 4.dp)
+                        .padding(top = 2.dp, bottom = tabPad + 4.dp)
                         .clickable(tap)
                         .semantics { contentDescription = tab.name + ", tab" },
                 )

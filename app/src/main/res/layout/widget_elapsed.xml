@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Time since the workout started, on the widget: counts up on its own, with no widget updates.
+     System font, since widgets can't use bundled fonts. -->
+<Chronometer xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/chronometer"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:fontFamily="sans-serif-medium"
+    android:fontFeatureSettings="tnum"
+    android:gravity="start"
+    android:includeFontPadding="false"
+    android:textSize="13sp" />
