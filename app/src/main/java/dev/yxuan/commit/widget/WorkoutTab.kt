@@ -133,7 +133,8 @@ private fun Live(live: LiveWorkout) {
             Text(WorkoutFormat.summary(live), style = TextStyle(color = c.muted, fontSize = 14.sp))
             Spacer(GlanceModifier.height(16.dp))
             Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                TextButton("Open summary", actionStartActivity<MainActivity>(actionParametersOf(OpenWorkoutParam to true)))
+                // The session's sets in History: more than the summary above, not the same screen bigger.
+                TextButton("See sets", actionStartActivity<MainActivity>(actionParametersOf(OpenSessionParam to s.sessionId)))
                 Spacer(GlanceModifier.height(16.dp))
                 WidgetButton("Done", actionRunCallback<EndWorkoutAction>(), primary = false)
             }

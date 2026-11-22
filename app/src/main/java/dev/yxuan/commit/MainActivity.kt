@@ -104,6 +104,7 @@ class MainActivity : ComponentActivity() {
         getStringExtra(EXTRA_TODO_ID)?.let { return TodoEditorRoute(todoId = it) }
         if (getBooleanExtra(EXTRA_NEW_COMMITMENT, false)) return TodayRoute(newCommitment = true)
         if (getBooleanExtra(EXTRA_OPEN_WORKOUT, false)) return LiveWorkoutRoute
+        getStringExtra(EXTRA_OPEN_SESSION)?.let { return SessionDetailRoute(it) }
         // Workouts live on Today now.
         if (getBooleanExtra(EXTRA_OPEN_WORKOUTS, false)) return TodayRoute()
         getStringExtra(EXTRA_OPEN_RECAP)?.let { kind ->
@@ -127,6 +128,8 @@ class MainActivity : ComponentActivity() {
         /** Matches the widget's `todo_id` action parameter, which Glance passes as an intent extra. */
         const val EXTRA_TODO_ID = "todo_id"
         const val EXTRA_OPEN_WORKOUT = "open_workout"
+        /** A workout session's sets (History), e.g. from the widget's finished-workout panel. */
+        const val EXTRA_OPEN_SESSION = "open_session"
         const val EXTRA_OPEN_WORKOUTS = "open_workouts"
         const val EXTRA_OPEN_RECAP = "open_recap"
         const val EXTRA_NEW_COMMITMENT = "new_commitment"
