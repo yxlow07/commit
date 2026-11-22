@@ -49,6 +49,21 @@ class CommitmentRepository(
         edit(id) { it.copy(archived = false, sortOrder = last + 1) }
     }
 
+    /** Saves [ids] as the new order of the active commitments; any not listed keep their place after them. */
+    suspend fun reorder(ids: List<String>) {
+        val active = dao.getActive()
+        val byId = active.associateBy { it.id }
+        val ordered = ids.mapNotNull { byId[it] } + active.filter { it.id !in ids }
+        val now = clock.millis()
+        val changed = ordered.mapIndexedNotNull { index, c ->
+            if (c.sortOrder == index) null else c.copy(sortOrder = index, updatedAt = now, dirty = true)
+        }
+        if (changed.isNotEmpty()) {
+            dao.upsertAll(changed)
+            listener.onDataChanged()
+        }
+    }
+
     /** Moves a commitment up (delta = -1) or down (delta = +1) and renumbers the rest. */
     suspend fun move(id: String, delta: Int) {
         val list = dao.getActive().toMutableList()

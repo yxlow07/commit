@@ -1,5 +1,6 @@
 package dev.yxuan.commit.ui.commitments
 
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -59,8 +60,7 @@ fun CommitSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, modifier:
 
 /**
  * Create (initial = null) or edit a commitment (F1.1–F1.3): name, type on create; on edit also
- * "Show on widget", reorder and archive. The colour is kept for the web app's commitment dots; the
- * phone's interface stays greyscale.
+ * "Show on widget" and archive. Reordering is on Today: hold a commitment and drag it.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -68,7 +68,6 @@ fun CommitmentDialog(
     initial: CommitmentEntity?,
     onDismiss: () -> Unit,
     onSave: (name: String, type: CommitmentType, color: Int, showInWidget: Boolean) -> Unit,
-    onMove: ((Int) -> Unit)? = null,
     onArchive: (() -> Unit)? = null,
 ) {
     val c = Commit.colors
@@ -107,7 +106,7 @@ fun CommitmentDialog(
             }
         }
         Column {
-            FieldLabel("Colour on the web app")
+            FieldLabel("Colour")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 CommitmentPalette.forEachIndexed { i, swatch ->
                     val on = swatch == color
@@ -128,14 +127,9 @@ fun CommitmentDialog(
                 }
             }
         }
-        if (onMove != null || onArchive != null) {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                onMove?.let {
-                    TextAction("Move up", onClick = { it(-1) }, muted = true)
-                    TextAction("Move down", onClick = { it(1) }, muted = true)
-                }
-                onArchive?.let { TextAction("Archive", onClick = it, muted = true) }
-            }
+        if (initial != null) {
+            Text("To reorder, hold a commitment on Today and drag it.", style = Commit.type.meta, color = c.muted)
         }
+        onArchive?.let { TextAction("Archive", onClick = it, muted = true, modifier = Modifier.offset(x = (-12).dp)) }
     }
 }

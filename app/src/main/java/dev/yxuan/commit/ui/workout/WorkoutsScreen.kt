@@ -154,7 +154,6 @@ fun WorkoutsScreen(
             initial = owner,
             onDismiss = { editingId = null },
             onSave = { name, _, color, show -> viewModel.updateCommitment(owner.id, name, color, show); editingId = null },
-            onMove = { viewModel.moveCommitment(owner.id, it) },
             onArchive = { viewModel.archiveCommitment(owner.id); editingId = null },
         )
     }

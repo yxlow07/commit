@@ -38,10 +38,6 @@ class CommitmentDetailViewModel(
         viewModelScope.launch { commitments.update(commitmentId, name, color, showInWidget) }
     }
 
-    fun move(delta: Int) {
-        viewModelScope.launch { commitments.move(commitmentId, delta) }
-    }
-
     fun archive() {
         viewModelScope.launch { commitments.archive(commitmentId) }
     }

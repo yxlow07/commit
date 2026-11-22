@@ -1,5 +1,19 @@
 package dev.yxuan.commit.ui.today
 
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.lazy.rememberLazyListState
 import dev.yxuan.commit.ui.components.Glyph
 import dev.yxuan.commit.ui.components.SectionHeader
 import androidx.compose.foundation.layout.Arrangement
@@ -83,6 +97,10 @@ class TodayViewModel(
         commitments.observeActive(), todos.observeOpenAll(), routines.observeSummaries(),
     ) { list, open, routineList -> build(list, open, routineList) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TodayState("", emptyList(), loaded = false))
+
+    fun reorder(ids: List<String>) {
+        viewModelScope.launch { commitments.reorder(ids) }
+    }
 
     fun create(name: String, type: CommitmentType, color: Int) {
         viewModelScope.launch { commitments.create(name, type, color) }
@@ -171,7 +189,19 @@ fun TodayScreen(
     var creating by remember { mutableStateOf(startCreating) }
     val today = LocalDate.now()
 
-    LazyColumn(modifier.fillMaxSize(), contentPadding = dev.yxuan.commit.ui.components.ScreenPadding) {
+    // Hold a commitment and drag it to reorder. While dragging, [order] is the list as shown; it's
+    // saved when the finger lifts, and follows the database again otherwise.
+    val listState = rememberLazyListState()
+    val haptics = LocalHapticFeedback.current
+    var dragging by remember { mutableStateOf<String?>(null) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    val order = remember { mutableStateListOf<String>() }
+    val rowIds = state.rows.map { it.commitment.id }
+    if (dragging == null && order.toList() != rowIds) { order.clear(); order.addAll(rowIds) }
+    val rowsById = state.rows.associateBy { it.commitment.id }
+    val shownRows = order.mapNotNull { rowsById[it] }
+
+    LazyColumn(modifier.fillMaxSize(), state = listState, contentPadding = dev.yxuan.commit.ui.components.ScreenPadding) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(Space.l)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -211,9 +241,42 @@ fun TodayScreen(
             }
         }
 
-        items(state.rows, key = { it.commitment.id }) { row ->
+        items(shownRows, key = { it.commitment.id }) { row ->
             // The commitment's colour: in full on the count, a light tint on the detail line.
             val accent = Color(row.commitment.color)
+            val id = row.commitment.id
+            val lifted = dragging == id
+            val reorder = Modifier.pointerInput(id) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = {
+                        dragging = id
+                        dragOffset = 0f
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    },
+                    onDrag = { change, amount ->
+                        change.consume()
+                        dragOffset += amount.y
+                        val visible = listState.layoutInfo.visibleItemsInfo
+                        val self = visible.firstOrNull { it.key == id } ?: return@detectDragGesturesAfterLongPress
+                        val centre = self.offset + dragOffset + self.size / 2f
+                        val target = visible.firstOrNull { it.key != id && it.key in order && centre.toInt() in it.offset until it.offset + it.size }
+                        if (target != null) {
+                            val from = order.indexOf(id)
+                            val to = order.indexOf(target.key as String)
+                            order.add(to, order.removeAt(from))
+                            // The row now sits where the target was; keep it under the finger.
+                            dragOffset -= (target.offset - self.offset)
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        }
+                    },
+                    onDragEnd = {
+                        if (order.toList() != rowIds) viewModel.reorder(order.toList())
+                        dragging = null
+                        dragOffset = 0f
+                    },
+                    onDragCancel = { dragging = null; dragOffset = 0f },
+                )
+            }
             NavRow(
                 trailingColor = accent,
                 detailColor = lerp(c.muted, accent, 0.35f),
@@ -224,7 +287,16 @@ fun TodayScreen(
                 trailingStyle = t.tabSelected.tnum(),
                 minHeight = 64.dp,
                 onClick = { if (row.commitment.type == CommitmentType.WORKOUT) onOpenWorkouts() else onOpenCommitment(row.commitment.id) },
-                modifier = Modifier.padding(bottom = Space.xs),
+                modifier = Modifier
+                    .then(if (lifted) Modifier.zIndex(1f) else Modifier.animateItem())
+                    .graphicsLayer {
+                        translationY = if (lifted) dragOffset else 0f
+                        if (lifted) { scaleX = 1.02f; scaleY = 1.02f }
+                    }
+                    .then(if (lifted) Modifier.shadow(8.dp, RoundedCornerShape(Commit.shapes.button)).background(c.surface, RoundedCornerShape(Commit.shapes.button)) else Modifier)
+                    .then(reorder)
+                    .padding(bottom = Space.xs)
+                    .semantics { customActions = moveActions(id, order) { viewModel.reorder(it) } },
             )
         }
 
@@ -237,4 +309,14 @@ fun TodayScreen(
             onSave = { name, type, color, _ -> viewModel.create(name, type, color); creating = false },
         )
     }
+}
+
+/** "Move up" / "Move down" for screen readers, which can't hold and drag. */
+private fun moveActions(id: String, order: List<String>, save: (List<String>) -> Unit): List<CustomAccessibilityAction> {
+    val i = order.indexOf(id)
+    fun moved(to: Int) = order.toMutableList().apply { add(to, removeAt(i)) }
+    return listOfNotNull(
+        if (i > 0) CustomAccessibilityAction("Move up") { save(moved(i - 1)); true } else null,
+        if (i in 0 until order.size - 1) CustomAccessibilityAction("Move down") { save(moved(i + 1)); true } else null,
+    )
 }

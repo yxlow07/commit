@@ -150,7 +150,6 @@ fun CommitmentDetailScreen(
             initial = commitment,
             onDismiss = { editing = false },
             onSave = { n, _, color, show -> viewModel.update(n, color, show); editing = false },
-            onMove = { viewModel.move(it) },
             onArchive = { viewModel.archive(); editing = false },
         )
     }

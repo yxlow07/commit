@@ -59,10 +59,6 @@ class WorkoutsViewModel(
         viewModelScope.launch { commitmentRepo.update(id, name, color, showInWidget) }
     }
 
-    fun moveCommitment(id: String, delta: Int) {
-        viewModelScope.launch { commitmentRepo.move(id, delta) }
-    }
-
     fun archiveCommitment(id: String) {
         viewModelScope.launch { commitmentRepo.archive(id) }
     }
