@@ -112,6 +112,9 @@ private fun RoutineRow(r: RoutineSummary, planned: Boolean) {
 /** Corner radius of every widget button (matches the app's button token). */
 internal val WIDGET_BUTTON_RADIUS = 12.dp
 
+/** From this height the full panel has room for the workout time as a centred headline between sets. */
+internal val HERO_TIMER_HEIGHT = 340.dp
+
 /** Below this height (3x2 / 4x2) the workout panel uses its compact form. */
 internal val COMPACT_WORKOUT_HEIGHT = 270.dp
 
@@ -137,16 +140,25 @@ private fun Live(live: LiveWorkout) {
             return@Column
         }
         val ex = live.exercise ?: return@Column
-        Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(GlanceModifier.defaultWeight()) {
-                Text(ex.name, maxLines = 1, style = TextStyle(color = c.ink, fontSize = 17.sp, fontWeight = FontWeight.Bold))
-                Text(WorkoutFormat.position(live), maxLines = 1, style = TextStyle(color = c.muted, fontSize = 13.sp, fontWeight = FontWeight.Medium))
+        // On a tall widget, between sets, the workout time fills the free middle as the headline.
+        // During a rest or a timed hold the countdown is the headline, so the time is a label.
+        val heroTimer = LocalSize.current.height >= HERO_TIMER_HEIGHT && s.phase == WorkoutPhase.READY && !live.isTimed
+        Column(GlanceModifier.fillMaxWidth()) {
+            Text(ex.name, maxLines = 1, style = TextStyle(color = c.ink, fontSize = 17.sp, fontWeight = FontWeight.Bold))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(WorkoutFormat.position(live) + if (heroTimer) "" else ", ", maxLines = 1, style = TextStyle(color = c.muted, fontSize = 13.sp, fontWeight = FontWeight.Medium))
+                if (!heroTimer) Elapsed(live.startedAt)
             }
-            Elapsed(live.startedAt, big = true)
         }
         Spacer(GlanceModifier.height(12.dp))
         SetProgress(s.setNo, ex.sets)
-        Spacer(GlanceModifier.height(14.dp))
+        if (heroTimer) {
+            Box(GlanceModifier.fillMaxWidth().defaultWeight(), contentAlignment = Alignment.Center) {
+                Elapsed(live.startedAt, big = true)
+            }
+        } else {
+            Spacer(GlanceModifier.height(14.dp))
+        }
         when (s.phase) {
             WorkoutPhase.READY -> if (live.isTimed) {
                 Text("${ex.durationSeconds} s", style = TextStyle(color = c.ink, fontSize = 48.sp, fontFamily = WidgetLight, textAlign = TextAlign.Center), modifier = GlanceModifier.fillMaxWidth())
@@ -259,7 +271,7 @@ private fun SetProgress(setNo: Int, total: Int) {
 
 /**
  * Time since the workout started, counting up on its own (a system Chronometer, no widget updates):
- * [big] is the full panel's 48 sp headline, otherwise a 13 sp label for the compact panel.
+ * [big] is the tall panel's 56 sp centred headline, otherwise a 13 sp label.
  */
 @Composable
 private fun Elapsed(startedAt: Long, big: Boolean = false) {
@@ -270,7 +282,7 @@ private fun Elapsed(startedAt: Long, big: Boolean = false) {
         setTextColor(R.id.chronometer, (if (big) c.ink else c.muted).getColor(context).toArgb())
     }
     // Fixed width: a RemoteViews child otherwise stretches and pushes the exercise name out.
-    val size = if (big) GlanceModifier.width(170.dp).height(56.dp) else GlanceModifier.width(56.dp).height(16.dp)
+    val size = if (big) GlanceModifier.fillMaxWidth().height(64.dp) else GlanceModifier.width(56.dp).height(16.dp)
     AndroidRemoteViews(views, modifier = size.semantics { contentDescription = "Workout time" })
 }
 
