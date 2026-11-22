@@ -33,6 +33,7 @@ import dev.yxuan.commit.data.repo.Due
 import dev.yxuan.commit.domain.theme.ActiveTheme
 import dev.yxuan.commit.ui.components.DeleteIconButton
 import dev.yxuan.commit.ui.components.DialogPanel
+import dev.yxuan.commit.ui.components.Glass
 import dev.yxuan.commit.ui.components.PrimaryButton
 import dev.yxuan.commit.ui.components.TextAction
 import dev.yxuan.commit.ui.components.rememberCrossWindowBlur
@@ -213,7 +214,7 @@ private fun QuickAddDialog(
         contentAlignment = Alignment.Center,
     ) {
         DialogPanel(
-            glass = glass,
+            glass = if (glass) Glass.Frosted else Glass.Clear,
             title = title,
             actions = {
                 if (onDelete != null) {

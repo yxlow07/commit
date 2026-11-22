@@ -49,21 +49,30 @@ fun CommitDialog(
             window?.setDimAmount(if (blur) 0.2f else 0.45f)
             window?.setBlurBehind(blur, radius)
         }
-        DialogPanel(title = title, actions = actions, modifier = Modifier.padding(horizontal = 16.dp), glass = blur, content = content)
+        DialogPanel(title = title, actions = actions, modifier = Modifier.padding(horizontal = 16.dp), glass = if (blur) Glass.Frosted else Glass.Clear, content = content)
     }
 }
 
+/** How see-through a panel is. */
+enum class Glass {
+    /** Solid `surface`. */
+    None,
+    /** See-through without blur (no cross-window blur here): enough to show what's behind, text stays readable. */
+    Clear,
+    /** Over a blurred backdrop: more see-through, like frosted glass. */
+    Frosted,
+}
+
 /**
- * The panel itself, also used by the quick-add activity. [glass]: frosted, for windows that blur
- * what's behind them: the surface turns slightly see-through and gets a thin light edge, like glass.
- * Without blur it stays solid, so text never sits on an unblurred background.
+ * The panel itself, also used by the quick-add activity. [glass]: the surface turns see-through and
+ * gets a thin light edge, like glass; more so when the window blurs what's behind it.
  */
 @Composable
 fun DialogPanel(
     title: String,
     actions: @Composable RowScope.() -> Unit,
     modifier: Modifier = Modifier,
-    glass: Boolean = false,
+    glass: Glass = Glass.None,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val c = Commit.colors
@@ -72,11 +81,11 @@ fun DialogPanel(
         modifier
             .fillMaxWidth()
             .then(
-                if (glass) Modifier
+                if (glass == Glass.None) Modifier.clip(shape).background(c.surface)
+                else Modifier
                     .clip(shape)
-                    .background(c.surface.copy(alpha = if (c.isDark) 0.72f else 0.8f))
-                    .border(1.dp, Color.White.copy(alpha = if (c.isDark) 0.14f else 0.6f), shape)
-                else Modifier.clip(shape).background(c.surface)
+                    .background(c.surface.copy(alpha = if (glass == Glass.Frosted) 0.55f else if (c.isDark) 0.7f else 0.72f))
+                    .border(1.dp, Color.White.copy(alpha = if (c.isDark) 0.16f else 0.65f), shape)
             )
             .verticalScroll(rememberScrollState())
             .padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 20.dp),

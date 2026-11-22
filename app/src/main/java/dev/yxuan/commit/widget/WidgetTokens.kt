@@ -26,6 +26,11 @@ data class WidgetColors(
     val danger: ColorProvider,
     /** Unselected tabs: the light `faint` grey, so the selected tab clearly leads. */
     val tabIdle: ColorProvider,
+    /**
+     * The widget panel: `surface` at 72 %, so the wallpaper shows through. Widgets can't blur what's
+     * behind them (the launcher draws them), so this is see-through rather than frosted.
+     */
+    val panel: ColorProvider,
 ) {
     companion object {
         fun of(theme: ActiveTheme): WidgetColors {
@@ -40,6 +45,7 @@ data class WidgetColors(
                 faint = p { it.faint }, track = p { it.track }, fill = p { it.fill }, surface = p { it.surface },
                 danger = p { it.danger },
                 tabIdle = p { it.faint },
+                panel = ColorProvider(day = Color(day.surface).copy(alpha = 0.72f), night = Color(night.surface).copy(alpha = 0.72f)),
             )
         }
 

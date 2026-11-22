@@ -126,7 +126,7 @@ class CommitWidget : GlanceAppWidget() {
             val colors = remember(theme) { WidgetColors.of(theme) }
 
             CompositionLocalProvider(LocalWidgetColors provides colors) {
-                val panel = GlanceModifier.fillMaxSize().appWidgetBackground().background(colors.surface)
+                val panel = GlanceModifier.fillMaxSize().appWidgetBackground().background(colors.panel)
                     .let { if (theme.usesSystemRadius()) it.cornerRadius(android.R.dimen.system_app_widget_background_radius) else it.cornerRadius(theme.spec.cornerRadius.dp) }
                     .padding(start = 20.dp, end = 6.dp, top = 16.dp, bottom = 14.dp)
                 Column(panel) {
