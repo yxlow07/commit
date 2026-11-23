@@ -4,8 +4,9 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.app.Activity
 import android.text.format.DateUtils
-import androidx.credentials.exceptions.GetCredentialCancellationException
-import androidx.credentials.exceptions.NoCredentialException
+import androidx.activity.ComponentActivity
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.common.api.CommonStatusCodes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.heightIn
@@ -21,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.yxuan.commit.appContainer
+import dev.yxuan.commit.sync.SignInCancelledException
 import dev.yxuan.commit.sync.SyncState
 import dev.yxuan.commit.ui.components.PrimaryButton
 import dev.yxuan.commit.ui.components.SecondaryButton
@@ -59,8 +61,9 @@ fun AccountSection() {
                         busy = true
                         message = null
                         scope.launch {
-                            sync.signInWithGoogle(context.findActivity() ?: context)
-                                .onFailure { message = signInError(it) }
+                            val activity = context.findActivity() as? ComponentActivity
+                            if (activity == null) message = "Sign-in needs the app open."
+                            else sync.signInWithGoogle(activity).onFailure { message = signInError(it) }
                             busy = false
                         }
                     },
@@ -79,11 +82,12 @@ fun AccountSection() {
     }
 }
 
-/** Plain-language sign-in errors; the common one is a device with no Google account. */
-private fun signInError(e: Throwable): String = when (e) {
-    is NoCredentialException ->
-        "No Google account on this device. Add one in Android Settings → Passwords & accounts, then try again."
-    is GetCredentialCancellationException -> "Sign-in cancelled."
+/** Plain-language sign-in errors. */
+private fun signInError(e: Throwable): String = when {
+    e is SignInCancelledException -> "Sign-in cancelled."
+    e is ApiException && e.statusCode == CommonStatusCodes.DEVELOPER_ERROR ->
+        "This build isn't registered with Google yet (OAuth client / SHA-1)."
+    e is ApiException && e.statusCode == CommonStatusCodes.NETWORK_ERROR -> "No connection. Try again."
     else -> "Sign-in failed: ${e.message ?: e::class.simpleName}"
 }
 

@@ -19,3 +19,4 @@ firebase-service-account.json
 # Release signing key (never commit)
 *.jks
 *.keystore
+.build-cli/

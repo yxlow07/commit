@@ -1,6 +1,7 @@
 package dev.yxuan.commit.sync
 
 import android.content.Context
+import androidx.activity.ComponentActivity
 import android.util.Log
 import dev.yxuan.commit.BuildConfig
 import dev.yxuan.commit.data.db.AppDatabase
@@ -102,10 +103,10 @@ class SyncManager(
         }
     }
 
-    /** Google sign-in via Credential Manager → Supabase Auth (PRD: Google sign-in). */
-    suspend fun signInWithGoogle(activityContext: Context): Result<Unit> = runCatching {
+    /** Google sign-in via Play services → Supabase Auth (PRD: Google sign-in). */
+    suspend fun signInWithGoogle(activity: ComponentActivity): Result<Unit> = runCatching {
         val client = supabase ?: error("Sync is not configured")
-        val token = GoogleSignIn.requestIdToken(activityContext, SyncConfig.googleWebClientId)
+        val token = GoogleSignIn.requestIdToken(activity, SyncConfig.googleWebClientId)
         client.auth.signInWith(IDToken) {
             idToken = token.idToken
             provider = Google

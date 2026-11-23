@@ -62,6 +62,7 @@ android {
                 // and the release build crashed at launch (IllegalAccessError in WorkManagerInitializer).
                 enable = true
             }
+            proguardFiles("proguard-rules.pro")
         }
     }
     lint {
@@ -110,9 +111,7 @@ dependencies {
     implementation(libs.supabase.auth)
     implementation(libs.supabase.postgrest)
     implementation(libs.ktor.client.okhttp)
-    implementation(libs.androidx.credentials)
-    implementation(libs.androidx.credentials.play)
-    implementation(libs.googleid)
+    implementation(libs.play.services.auth)
     implementation(libs.androidx.work)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
