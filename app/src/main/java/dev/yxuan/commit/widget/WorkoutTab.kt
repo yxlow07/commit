@@ -270,15 +270,22 @@ private fun CompactLive(live: LiveWorkout) {
 private fun SetProgress(setNo: Int, total: Int) {
     val c = LocalWidgetColors.current
     Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        // Glance drops Row children past 10, so each segment carries its own 4 dp gap (no Spacers),
+        // and more than 10 sets are shown on 10 segments scaled to the progress.
         Row(GlanceModifier.defaultWeight()) {
-            for (n in 1..total.coerceAtLeast(1)) {
-                if (n > 1) Spacer(GlanceModifier.width(4.dp))
+            val count = total.coerceAtLeast(1)
+            val segments = minOf(count, MAX_ROW_CHILDREN)
+            for (k in 1..segments) {
+                // The set this segment stands for (1:1 up to 10 sets).
+                val n = if (count == segments) k else (k * count + segments - 1) / segments
                 val color = when {
                     n < setNo -> c.ink
-                    n == setNo -> c.faint
+                    n == setNo || (count != segments && n > setNo && (k - 1) * count / segments < setNo) -> c.faint
                     else -> c.track
                 }
-                Box(GlanceModifier.defaultWeight().height(4.dp).cornerRadius(2.dp).background(color)) {}
+                Box(GlanceModifier.defaultWeight().padding(start = if (k > 1) 4.dp else 0.dp)) {
+                    Box(GlanceModifier.fillMaxWidth().height(4.dp).cornerRadius(2.dp).background(color)) {}
+                }
             }
         }
         Spacer(GlanceModifier.width(10.dp))

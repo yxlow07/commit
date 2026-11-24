@@ -164,6 +164,9 @@ internal fun withTickedRows(items: List<TodoItem>, ticked: Map<String, Int>): Li
 
 // ---- Tabs ----
 
+/** Glance renders at most 10 children in a Row or Column and silently drops the rest. */
+internal const val MAX_ROW_CHILDREN = 10
+
 /**
  * Rough text width for fitting tabs (Glance can't measure). Measured on the emulator: about 0.5 em
  * per character for the large light tab, 0.47 em for the 15 sp medium ones.
@@ -234,9 +237,11 @@ private fun TabRow(tabs: List<CommitmentEntity>, selected: CommitmentEntity) {
 
     // 12 dp above and below for a 44 dp hit area; a short widget showing a workout needs the room.
     val tabPad = if (selected.type == CommitmentType.WORKOUT && LocalSize.current.height < COMPACT_WORKOUT_HEIGHT) 4.dp else 12.dp
+    // A Glance Row holds at most 10 children and silently drops the rest, so the 14 dp gap is each
+    // tab's start padding rather than a Spacer between tabs (6 tabs + 5 spacers lost the 6th tab).
     Row(GlanceModifier.fillMaxWidth().padding(end = 10.dp), verticalAlignment = Alignment.Bottom) {
-        slots.forEachIndexed { n, slot ->
-            if (n > 0) Spacer(GlanceModifier.width(14.dp))
+        slots.take(MAX_ROW_CHILDREN).forEachIndexed { n, slot ->
+            val gap = if (n > 0) 14.dp else 0.dp
             val tab = tabs[slot.index]
             val on = slot.index == selectedIndex
             val tap = actionRunCallback<SelectTabAction>(actionParametersOf(CommitmentIdParam to tab.id))
@@ -246,7 +251,7 @@ private fun TabRow(tabs: List<CommitmentEntity>, selected: CommitmentEntity) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = GlanceModifier
-                        .padding(top = 2.dp, bottom = (tabPad - 5.dp).coerceAtLeast(0.dp))
+                        .padding(start = gap, top = 2.dp, bottom = (tabPad - 5.dp).coerceAtLeast(0.dp))
                         .clickable(tap)
                         .semantics { contentDescription = tab.name + ", selected tab" },
                 ) {
@@ -262,8 +267,8 @@ private fun TabRow(tabs: List<CommitmentEntity>, selected: CommitmentEntity) {
                     maxLines = 1,
                     style = TextStyle(color = c.tabIdle, fontSize = 15.sp, fontWeight = FontWeight.Normal),
                     modifier = GlanceModifier
-                        .let { if (slot.partial) it.width(slot.width.dp) else it }
-                        .padding(top = 2.dp, bottom = tabPad + 4.dp)
+                        .let { if (slot.partial) it.width(slot.width.dp + gap) else it }
+                        .padding(start = gap, top = 2.dp, bottom = tabPad + 4.dp)
                         .clickable(tap)
                         .semantics { contentDescription = tab.name + ", tab" },
                 )
@@ -281,7 +286,7 @@ private fun TodoArea(commitment: CommitmentEntity, items: List<TodoItem>, clock:
     val small = size.height < MEDIUM.height || size.width < MEDIUM.width
     val large = !small && size.height >= LARGE.height
     // Rows that fit between the tabs (~60 dp) and the footer (44 dp), inside 30 dp of padding.
-    val fit = ((size.height - 30.dp - 60.dp - 44.dp) / 52.dp).toInt().coerceAtLeast(1)
+    val fit = ((size.height - 30.dp - 60.dp - 44.dp) / 52.dp).toInt().coerceIn(1, MAX_ROW_CHILDREN)
     val maxRows = if (small) minOf(2, fit) else minOf(4, fit)
     val open = items.count { !it.isDone }
     val late = items.count { !it.isDone && DueLabels.isLate(it.dueAt, it.hasTime, clock) }
