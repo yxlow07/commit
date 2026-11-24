@@ -2,155 +2,217 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTable } from "@/lib/data/store";
-import { createExercise, deleteExercise, reorderExercises, updateExercise, updateRoutine, type ExerciseInput } from "@/lib/data/mutations";
-import { WEEKDAYS, formatWeight, hasWeekday, toggleWeekday } from "@/lib/domain/format";
+import {
+  createExercise, deleteExercise, deleteRoutine, reorderExercises, restoreRow, updateExercise, updateRoutine, type ExerciseInput,
+} from "@/lib/data/mutations";
+import { formatWeight } from "@/lib/domain/format";
+import { restLabel } from "@/lib/domain/labels";
 import type { Exercise, Routine } from "@/lib/domain/types";
-import { Button, Card, Chip, Empty, ErrorText, Field, IconButton, Icons, Input, Spinner, useAction } from "@/components/ui";
+import { usePageTitle } from "@/components/AppShell";
+import { OFFLINE_REASON, useOnline } from "@/components/Online";
 import { SortableList } from "@/components/Sortable";
+import { useToast } from "@/components/Toast";
+import {
+  Button, Dialog, EmptyText, Field, FieldGroup, IconTile, Icons, Loading, SectionHeading, Segmented, Stepper, TextField, WeekdayToggles,
+} from "@/components/ui";
 
-/** Routine editor (F5.1): name, rest between exercises, planned weekdays, ordered exercises. */
+/** Routine editor (web spec, "Routine editor"): name, planned days, rest, ordered exercises. */
 export default function RoutinePage() {
   const id = useSearchParams().get("id");
   const routinesQ = useTable("routines");
   const exercisesQ = useTable("exercises");
-
-  if (routinesQ.isPending || exercisesQ.isPending) return <Spinner />;
+  const commitmentsQ = useTable("commitments");
   const routine = routinesQ.data?.find((r) => r.id === id);
-  if (!routine) return <Empty>Routine not found. <Link href="/" className="text-primary underline">Back</Link></Empty>;
+  usePageTitle(routine?.name ?? "");
 
+  if (routinesQ.isPending || exercisesQ.isPending) return <Loading />;
+  if (!routine) return <EmptyText>This routine doesn&apos;t exist any more. <Link href="/" className="font-bold hover:underline">Back to Today</Link></EmptyText>;
+
+  const commitment = commitmentsQ.data?.find((c) => c.id === routine.commitment_id);
   const exercises = (exercisesQ.data ?? []).filter((e) => e.routine_id === routine.id).sort((a, b) => a.sort_order - b.sort_order);
-  return (
-    <div className="flex flex-col gap-4">
-      <Link href={`/?c=${routine.commitment_id}`} className="text-sm text-primary">← Back</Link>
-      <RoutineFields key={routine.id + routine.updated_at} routine={routine} />
-      <Card>
-        <h2 className="mb-2 font-semibold">Exercises</h2>
-        <ExerciseList routine={routine} exercises={exercises} />
-      </Card>
-    </div>
-  );
+  return <Editor key={routine.id} routine={routine} exercises={exercises} back={{ href: `/c?id=${routine.commitment_id}`, label: commitment?.name ?? "Back" }} />;
 }
 
-function RoutineFields({ routine }: { routine: Routine }) {
+function Editor({ routine, exercises, back }: { routine: Routine; exercises: Exercise[]; back: { href: string; label: string } }) {
   const qc = useQueryClient();
-  const [name, setName] = useState(routine.name);
-  const [rest, setRest] = useState(String(routine.rest_between_exercises_s));
-  const [days, setDays] = useState(routine.planned_days);
-  const action = useAction();
-  const dirty = name !== routine.name || Number(rest) !== routine.rest_between_exercises_s || days !== routine.planned_days;
+  const router = useRouter();
+  const toast = useToast();
+  const online = useOnline();
+  const [dialog, setDialog] = useState<{ open: boolean; exercise: Exercise | null }>({ open: false, exercise: null });
+
+  const save = (changes: Partial<Routine>): Promise<unknown> =>
+    updateRoutine(qc, routine.id, changes).catch(() => toast({ message: "Couldn't save. Check your connection.", action: { label: "Try again", run: () => save(changes) } }));
+
+  async function remove() {
+    try {
+      await deleteRoutine(qc, routine.id);
+      router.push(back.href);
+      toast({ message: `${routine.name} deleted`, action: { label: "Undo", run: () => restoreRow(qc, "routines", routine.id) } });
+    } catch {
+      toast({ message: "Couldn't delete. Check your connection." });
+    }
+  }
 
   return (
-    <Card className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-end gap-3">
-        <Field label="Name" className="min-w-48 flex-1"><Input value={name} onChange={(e) => setName(e.target.value)} /></Field>
-        <Field label="Rest between exercises (s)"><Input type="number" min={0} value={rest} onChange={(e) => setRest(e.target.value)} className="w-40" /></Field>
-      </div>
-      <div>
-        <p className="mb-1 text-xs font-medium text-fg-muted">Planned days (shown in the morning recap)</p>
-        <div className="flex flex-wrap gap-1.5">
-          {WEEKDAYS.map((d, i) => <Chip key={d} selected={hasWeekday(days, i)} onClick={() => setDays(toggleWeekday(days, i))}>{d}</Chip>)}
-        </div>
-      </div>
-      <ErrorText error={action.error} />
-      <div>
-        <Button variant="primary" disabled={!dirty || !name.trim() || action.busy}
-          onClick={() => action.run(() => updateRoutine(qc, routine.id, { name: name.trim(), rest_between_exercises_s: Math.max(0, Number(rest) || 0), planned_days: days }))}>
-          Save routine
-        </Button>
-      </div>
-    </Card>
-  );
-}
+    <div className="flex flex-col gap-8">
+      <header className="flex flex-col gap-2">
+        <Link href={back.href} className="-ml-2 flex h-9 items-center gap-1 self-start rounded-lg px-2 text-label text-muted hover:bg-hover hover:text-ink">
+          {Icons.left}{back.label}
+        </Link>
+        <EditableTitle key={routine.name} value={routine.name} onSave={(name) => save({ name })} />
+      </header>
 
-function ExerciseList({ routine, exercises }: { routine: Routine; exercises: Exercise[] }) {
-  const qc = useQueryClient();
-  const [editing, setEditing] = useState<string | null>(null);
-  const action = useAction();
-  const nextOrder = exercises.length ? Math.max(...exercises.map((e) => e.sort_order)) + 1 : 0;
+      <FieldGroup label="Planned days">
+        <WeekdayToggles label="Planned days" mask={routine.planned_days} onChange={(planned_days) => save({ planned_days })} />
+      </FieldGroup>
 
-  return (
-    <div className="flex flex-col gap-3">
-      {exercises.length === 0 && <p className="py-3 text-sm text-fg-muted">No exercises yet.</p>}
-      {/* Drag to reorder (as on the phone); a row opens its editor, which also deletes. */}
-      <SortableList
-        items={exercises}
-        getId={(e) => e.id}
-        getLabel={(e) => e.name}
-        onReorder={(ids) => action.run(() => reorderExercises(qc, exercises, ids))}
-        className="flex flex-col divide-y divide-line"
-        renderItem={(e, handle) =>
-          editing === e.id ? (
-            <div className="py-3">
-              <ExerciseForm exercise={e} submitLabel="Save" onCancel={() => setEditing(null)}
-                onDelete={async () => { if (await action.run(() => deleteExercise(qc, e.id))) setEditing(null); }}
-                onSubmit={async (input) => { if (await action.run(() => updateExercise(qc, e.id, input))) setEditing(null); }} />
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 py-2">
+      <div className="max-w-64">
+        <Stepper label="Rest between exercises" value={routine.rest_between_exercises_s} step={15} max={600}
+          format={restLabel} onChange={(v) => save({ rest_between_exercises_s: v })} />
+      </div>
+
+      <section className="flex flex-col gap-1">
+        <SectionHeading className="px-2">Exercises</SectionHeading>
+        <SortableList
+          items={exercises}
+          getId={(e) => e.id}
+          getLabel={(e) => e.name}
+          onReorder={(ids) => reorderExercises(qc, exercises, ids).catch(() => toast({ message: "Couldn't save the order. Check your connection." }))}
+          className="flex flex-col"
+          renderItem={(e, handle) => (
+            <div className="-ml-6 flex items-center">
               {handle}
-              <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setEditing(e.id)}>
-                <span className="block font-medium">{e.name}</span>
-                <span className="block text-xs text-fg-muted">{describe(e)}</span>
+              <button type="button" onClick={() => setDialog({ open: true, exercise: e })}
+                className="flex min-h-12 min-w-0 flex-1 cursor-default items-center gap-3 rounded-xl px-2 py-2.5 text-left hover:bg-hover">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-body">{e.name}</span>
+                  <span className="block truncate text-meta text-muted">{describe(e)}</span>
+                </span>
+                <span className="text-faint">{Icons.chevron}</span>
               </button>
             </div>
-          )
-        }
-      />
-      <div className="rounded-xl bg-surface-2 p-3">
-        <p className="mb-2 text-sm font-medium">Add exercise</p>
-        <ExerciseForm key={nextOrder} submitLabel="Add" onSubmit={(input) => action.run(() => createExercise(qc, routine.id, input, nextOrder))} />
+          )}
+        />
+        <button type="button" disabled={!online} title={online ? undefined : OFFLINE_REASON} onClick={() => setDialog({ open: true, exercise: null })}
+          className="flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-xl px-2 text-left text-body text-muted hover:bg-hover disabled:cursor-not-allowed">
+          {Icons.plus} Add exercise
+        </button>
+      </section>
+
+      <div>
+        <IconTile label={`Delete ${routine.name}`} disabled={!online} onClick={remove}>{Icons.trash}</IconTile>
       </div>
-      <ErrorText error={action.error} />
+
+      <ExerciseDialog
+        open={dialog.open}
+        exercise={dialog.exercise}
+        onClose={() => setDialog({ open: false, exercise: null })}
+        onSave={(input) => dialog.exercise
+          ? updateExercise(qc, dialog.exercise.id, input)
+          : createExercise(qc, routine.id, input, exercises.length ? Math.max(...exercises.map((x) => x.sort_order)) + 1 : 0)}
+        onDelete={dialog.exercise ? async () => {
+          const ex = dialog.exercise!;
+          await deleteExercise(qc, ex.id);
+          toast({ message: `${ex.name} deleted`, action: { label: "Undo", run: () => restoreRow(qc, "exercises", ex.id) } });
+        } : undefined}
+      />
     </div>
   );
 }
 
-/** "3 × 8 @ 60 kg · rest 90 s" or "2 × 30 s · rest 60 s". */
-function describe(e: Exercise): string {
-  const work = e.duration_seconds ? `${e.sets} × ${e.duration_seconds} s` : `${e.sets} × ${e.reps} @ ${formatWeight(e.weight)}`;
-  return `${work} · rest ${e.rest_seconds} s`;
+/** The routine name as a title.screen field: click to edit, Enter or blur saves, Esc cancels. */
+function EditableTitle({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+  const [text, setText] = useState(value);
+  const commit = () => { const t = text.trim(); if (t && t !== value) onSave(t); else setText(value); };
+  return (
+    <input
+      aria-label="Routine name"
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
+        if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setText(value); requestAnimationFrame(() => (e.target as HTMLInputElement).blur()); }
+      }}
+      className="-mx-2 w-[calc(100%+1rem)] cursor-text rounded-xl bg-transparent px-2 text-title-screen outline-none hover:bg-hover focus:bg-fill"
+    />
+  );
 }
 
-function ExerciseForm({ exercise, submitLabel, onSubmit, onCancel, onDelete }: {
-  exercise?: Exercise; submitLabel: string; onSubmit: (input: ExerciseInput) => unknown; onCancel?: () => void; onDelete?: () => void;
+/** "4 × 8, 60 kg, rest 90 s" or "3 × 30 s, rest 60 s". */
+function describe(e: Exercise): string {
+  const work = e.duration_seconds ? `${e.sets} × ${e.duration_seconds} s` : `${e.sets} × ${e.reps}, ${formatWeight(e.weight)}`;
+  return `${work}, rest ${e.rest_seconds} s`;
+}
+
+/** Exercise dialog: name; Sets and reps / Timed; steppers in a 2 x 2 grid; trash, Cancel, Save exercise. */
+function ExerciseDialog({ open, exercise, onClose, onSave, onDelete }: {
+  open: boolean; exercise: Exercise | null; onClose: () => void; onSave: (input: ExerciseInput) => Promise<unknown>; onDelete?: () => Promise<void>;
 }) {
+  return (
+    <Dialog open={open} onClose={onClose} title={exercise ? "Edit exercise" : "New exercise"}>
+      {open && <ExerciseForm exercise={exercise} onClose={onClose} onSave={onSave} onDelete={onDelete} />}
+    </Dialog>
+  );
+}
+
+function ExerciseForm({ exercise, onClose, onSave, onDelete }: {
+  exercise: Exercise | null; onClose: () => void; onSave: (input: ExerciseInput) => Promise<unknown>; onDelete?: () => Promise<void>;
+}) {
+  const toast = useToast();
+  const online = useOnline();
   const [name, setName] = useState(exercise?.name ?? "");
   const [timed, setTimed] = useState(Boolean(exercise?.duration_seconds));
-  const [sets, setSets] = useState(String(exercise?.sets ?? 3));
-  const [reps, setReps] = useState(String(exercise?.reps ?? 8));
-  const [weight, setWeight] = useState(String(exercise?.weight ?? 0));
-  const [rest, setRest] = useState(String(exercise?.rest_seconds ?? 90));
-  const [duration, setDuration] = useState(String(exercise?.duration_seconds ?? 30));
-  const valid = name.trim() && Number(sets) > 0 && (!timed || Number(duration) > 0);
+  const [sets, setSets] = useState(exercise?.sets ?? 3);
+  const [reps, setReps] = useState(exercise?.reps || 8);
+  const [weight, setWeight] = useState(exercise?.weight ?? 0);
+  const [rest, setRest] = useState(exercise?.rest_seconds ?? 90);
+  const [duration, setDuration] = useState(exercise?.duration_seconds ?? 30);
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    if (!name.trim()) return;
+    setBusy(true);
+    try {
+      await onSave({ name, sets, reps: timed ? 0 : reps, weight: timed ? 0 : weight, restSeconds: rest, durationSeconds: timed ? duration : null });
+      onClose();
+    } catch {
+      toast({ message: "Couldn't save. Check your connection." });
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
-    <form className="flex flex-wrap items-end gap-2"
-      onSubmit={(ev) => {
-        ev.preventDefault();
-        if (!valid) return;
-        onSubmit({
-          name, sets: Number(sets), reps: timed ? 0 : Number(reps) || 0, weight: timed ? 0 : Number(weight.replace(",", ".")) || 0,
-          restSeconds: Number(rest) || 0, durationSeconds: timed ? Number(duration) : null,
-        });
-      }}>
-      <Field label="Name" className="min-w-40 flex-1"><Input value={name} onChange={(e) => setName(e.target.value)} /></Field>
-      <Field label="Sets"><Input type="number" min={1} value={sets} onChange={(e) => setSets(e.target.value)} className="w-20" /></Field>
-      {timed ? (
-        <Field label="Seconds"><Input type="number" min={1} value={duration} onChange={(e) => setDuration(e.target.value)} className="w-24" /></Field>
-      ) : (
-        <>
-          <Field label="Reps"><Input type="number" min={0} value={reps} onChange={(e) => setReps(e.target.value)} className="w-20" /></Field>
-          <Field label="Weight (kg)"><Input type="number" min={0} step={0.5} value={weight} onChange={(e) => setWeight(e.target.value)} className="w-24" /></Field>
-        </>
-      )}
-      <Field label="Rest (s)"><Input type="number" min={0} value={rest} onChange={(e) => setRest(e.target.value)} className="w-24" /></Field>
-      <label className="flex items-center gap-2 pb-2 text-sm"><input type="checkbox" checked={timed} onChange={(e) => setTimed(e.target.checked)} className="h-4 w-4 accent-[var(--primary)]" />Timed</label>
-      {onDelete && <IconButton label={`Delete ${exercise?.name ?? "exercise"}`} onClick={onDelete} className="mb-0.5 bg-surface-2">{Icons.trash}</IconButton>}
-      <Button variant="primary" type="submit" disabled={!valid}>{submitLabel}</Button>
-      {onCancel && <Button variant="ghost" onClick={onCancel}>Cancel</Button>}
+    <form className="flex flex-col gap-5" onSubmit={(e) => { e.preventDefault(); save(); }}
+      onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save(); } }}>
+      <Field label="Name" htmlFor="exercise-name">
+        <TextField id="exercise-name" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Bench press" />
+      </Field>
+      <Segmented label="Kind" value={timed ? "timed" : "reps"} onChange={(v) => setTimed(v === "timed")}
+        items={[{ id: "reps", label: "Sets and reps" }, { id: "timed", label: "Timed" }]} />
+      <div className="grid grid-cols-2 gap-x-6 gap-y-5">
+        <Stepper label="Sets" value={sets} step={1} min={1} max={20} onChange={setSets} />
+        {timed
+          ? <Stepper label="Duration" value={duration} step={5} min={5} max={600} unit="seconds" onChange={setDuration} />
+          : <Stepper label="Reps" value={reps} step={1} min={1} max={100} unit="reps" onChange={setReps} />}
+        {!timed && <Stepper label="Weight" value={weight} step={2.5} max={500} unit="kg" onChange={setWeight} />}
+        <Stepper label="Rest" value={rest} step={15} max={600} format={restLabel} onChange={setRest} />
+      </div>
+      <div className="flex items-center gap-2">
+        {onDelete && (
+          <IconTile label={`Delete ${exercise?.name ?? "exercise"}`} disabled={!online || busy}
+            onClick={async () => { try { await onDelete(); onClose(); } catch { toast({ message: "Couldn't delete. Check your connection." }); } }}>
+            {Icons.trash}
+          </IconTile>
+        )}
+        <span className="flex-1" />
+        <Button variant="quiet" onClick={onClose}>Cancel</Button>
+        <Button variant="primary" type="submit" title={online ? undefined : OFFLINE_REASON} disabled={!name.trim() || busy || !online}>Save exercise</Button>
+      </div>
     </form>
   );
 }

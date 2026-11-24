@@ -1,124 +1,184 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 
 /**
- * Drag to reorder (same model as the phone): drag a row by its grip handle, or focus the handle and
- * use the Up / Down arrow keys. The list shows the new order while dragging and hands it to
- * [onReorder] when the pointer is released (or straight away for a key press).
+ * Drag to reorder (web spec, "Drag to reorder"). A grip shows on hover and keyboard focus.
+ * - Pointer: drag the grip; the row lifts with the hover background and the others slide out of
+ *   the way (150 ms). The order saves on drop.
+ * - Keyboard: focus the grip, Space lifts, arrow keys move, Space drops, Esc cancels.
+ * Each move is announced ("Study, moved to position 2 of 4").
  */
 export function SortableList<T>({
-  items, getId, getLabel, onReorder, renderItem, className = "",
+  items, getId, getLabel, onReorder, renderItem, className = "", itemClassName = "",
 }: {
   items: T[];
   getId: (item: T) => string;
   getLabel: (item: T) => string;
-  onReorder: (ids: string[]) => void;
+  /** Saves the new order; the dropped order shows until the returned promise settles. */
+  onReorder: (ids: string[]) => unknown;
   renderItem: (item: T, handle: ReactNode, dragging: boolean) => ReactNode;
   className?: string;
+  itemClassName?: string;
 }) {
-  const ids = items.map(getId);
-  const [drag, setDrag] = useState<{ id: string; order: string[]; dy: number } | null>(null);
+  const helpId = useId();
+  const serverIds = items.map(getId);
+  // The order just dropped, shown until the saved order comes back from the server.
+  const [optimistic, setOptimistic] = useState<string[] | null>(null);
+  const ids = optimistic && sameSet(optimistic, serverIds) ? optimistic : serverIds;
+
+  // Row positions are measured when a drag starts and kept with it, so render reads state only.
+  const [drag, setDrag] = useState<{ id: string; from: number; to: number; dy: number; keyboard: boolean; m: Measure } | null>(null);
+  const [announcement, setAnnouncement] = useState("");
   const rows = useRef(new Map<string, HTMLLIElement>());
-  // Captured when a drag starts: each row's top and height (in the original order), and where the pointer began.
-  const start = useRef<{ y: number; tops: Map<string, number>; heights: Map<string, number>; gap: number; listTop: number } | null>(null);
-
-  const order = drag?.order ?? ids;
   const byId = new Map(items.map((it) => [getId(it), it]));
+  const label = (id: string) => { const it = byId.get(id); return it ? getLabel(it) : ""; };
 
-  /** Where row [id] sits in [list], from the measured heights. */
-  function topOf(id: string, list: string[]) {
-    const s = start.current!;
-    let top = s.listTop;
-    for (const other of list) {
-      if (other === id) return top;
-      top += (s.heights.get(other) ?? 0) + s.gap;
+  function snapshot(y: number): Measure {
+    const tops: number[] = [];
+    const heights: number[] = [];
+    for (const id of ids) {
+      const r = rows.current.get(id)?.getBoundingClientRect();
+      tops.push(r?.top ?? 0);
+      heights.push(r?.height ?? 0);
     }
-    return top;
+    return { tops, heights, y };
   }
 
-  function begin(id: string, y: number) {
-    const tops = new Map<string, number>();
-    const heights = new Map<string, number>();
-    for (const rid of ids) {
-      const r = rows.current.get(rid)?.getBoundingClientRect();
-      if (r) { tops.set(rid, r.top); heights.set(rid, r.height); }
+  /** Offset of row [i] while the dragged row moves from [from] to [to]. */
+  function offset(i: number): number {
+    if (!drag) return 0;
+    const { from, to, m } = drag;
+    if (i === from) {
+      if (!drag.keyboard) return drag.dy;
+      return m.tops[to] - m.tops[from] + (to > from ? m.heights[to] - m.heights[from] : 0);
     }
-    const first = tops.get(ids[0]) ?? 0;
-    const gap = ids.length > 1 ? Math.max(0, (tops.get(ids[1]) ?? 0) - first - (heights.get(ids[0]) ?? 0)) : 0;
-    start.current = { y, tops, heights, gap, listTop: first };
-    setDrag({ id, order: ids, dy: 0 });
+    const shift = m.heights[from] + gapAfter(m, from);
+    if (from < to && i > from && i <= to) return -shift;
+    if (to < from && i >= to && i < from) return shift;
+    return 0;
   }
 
-  function move(y: number) {
-    const s = start.current;
-    if (!drag || !s) return;
-    const pointer = (s.tops.get(drag.id) ?? 0) + (s.heights.get(drag.id) ?? 0) / 2 + (y - s.y);
-    // Slot whose middle the pointer has passed, among the other rows.
-    const rest = drag.order.filter((x) => x !== drag.id);
-    let index = 0;
-    for (const other of rest) {
-      const mid = topOf(other, rest) + (s.heights.get(other) ?? 0) / 2;
-      if (pointer > mid) index++;
+  function targetFor(m: Measure, dy: number, from: number): number {
+    const centre = m.tops[from] + m.heights[from] / 2 + dy;
+    let to = from;
+    for (let i = 0; i < ids.length; i++) {
+      if (i === from) continue;
+      const mid = m.tops[i] + m.heights[i] / 2;
+      if (i > from && centre > mid) to = Math.max(to, i);
+      if (i < from && centre < mid) to = Math.min(to, i);
     }
-    const next = [...rest.slice(0, index), drag.id, ...rest.slice(index)];
-    // Keep the row under the pointer from wherever the new order lays it out.
-    const dy = (s.tops.get(drag.id) ?? 0) + (y - s.y) - topOf(drag.id, next);
-    setDrag({ id: drag.id, order: next, dy });
+    return to;
   }
 
-  function end() {
-    if (drag && drag.order.join() !== ids.join()) onReorder(drag.order);
-    start.current = null;
-    setDrag(null);
+  function commit(from: number, to: number) {
+    if (from !== to) {
+      const next = [...ids];
+      next.splice(to, 0, next.splice(from, 1)[0]);
+      setOptimistic(next);
+      Promise.resolve(onReorder(next)).finally(() => setOptimistic(null));
+    }
   }
 
-  function nudge(id: string, delta: number) {
-    const i = ids.indexOf(id);
-    const j = i + delta;
-    if (i < 0 || j < 0 || j >= ids.length) return;
-    const next = [...ids];
-    next.splice(j, 0, next.splice(i, 1)[0]);
-    onReorder(next);
+  function announce(id: string, to: number) {
+    setAnnouncement(`${label(id)}, moved to position ${to + 1} of ${ids.length}`);
   }
 
   return (
-    <ul className={className}>
-      {order.map((id) => {
-        const item = byId.get(id);
-        if (!item) return null;
-        const dragging = drag?.id === id;
-        const handle = (
-          <button
-            type="button"
-            aria-label={`Reorder ${getLabel(item)}. Drag, or use the up and down arrow keys.`}
-            title="Drag to reorder"
-            className="flex h-8 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded text-fg-muted opacity-50 transition hover:opacity-100 focus-visible:opacity-100 active:cursor-grabbing"
-            onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); begin(id, e.clientY); }}
-            onPointerMove={(e) => { if (drag) move(e.clientY); }}
-            onPointerUp={end}
-            onPointerCancel={end}
-            onKeyDown={(e) => {
-              if (e.key === "ArrowUp") { e.preventDefault(); nudge(id, -1); }
-              if (e.key === "ArrowDown") { e.preventDefault(); nudge(id, 1); }
-            }}
-          >
-            {GRIP}
-          </button>
-        );
-        return (
-          <li
-            key={id}
-            ref={(el) => { if (el) rows.current.set(id, el); else rows.current.delete(id); }}
-            style={dragging ? { transform: `translateY(${drag!.dy}px) scale(1.01)`, zIndex: 10, position: "relative" } : undefined}
-            className={dragging ? "rounded-xl bg-surface shadow-lg" : ""}
-          >
-            {renderItem(item, handle, dragging)}
-          </li>
-        );
-      })}
-    </ul>
+    <>
+      <ul className={className}>
+        {ids.map((id, i) => {
+          const item = byId.get(id);
+          if (!item) return null;
+          const dragging = drag?.id === id;
+          const dy = offset(i);
+          const handle = (
+            <button
+              type="button"
+              aria-label={`Reorder ${getLabel(item)}`}
+              aria-describedby={helpId}
+              aria-pressed={dragging || undefined}
+              title="Drag to reorder"
+              className={`flex h-11 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-faint hover:text-muted focus-visible:opacity-100 active:cursor-grabbing md:h-8 [@media(hover:none)]:opacity-100 ${dragging ? "opacity-100" : "opacity-0 group-hover/sort:opacity-100"}`}
+              onPointerDown={(e) => {
+                if (e.button !== 0) return;
+                e.currentTarget.setPointerCapture(e.pointerId);
+                setDrag({ id, from: i, to: i, dy: 0, keyboard: false, m: snapshot(e.clientY) });
+              }}
+              onPointerMove={(e) => {
+                if (!drag || drag.keyboard) return;
+                const moved = e.clientY - drag.m.y;
+                setDrag({ ...drag, dy: moved, to: targetFor(drag.m, moved, drag.from) });
+              }}
+              onPointerUp={() => {
+                if (!drag || drag.keyboard) return;
+                commit(drag.from, drag.to);
+                if (drag.from !== drag.to) announce(drag.id, drag.to);
+                setDrag(null);
+              }}
+              onPointerCancel={() => setDrag(null)}
+              onBlur={() => { if (drag?.keyboard) setDrag(null); }}
+              onKeyDown={(e) => {
+                if (e.key === " " || e.key === "Enter") {
+                  e.preventDefault();
+                  if (!drag) {
+                    setDrag({ id, from: i, to: i, dy: 0, keyboard: true, m: snapshot(0) });
+                    setAnnouncement(`${getLabel(item)} lifted. Use the arrow keys to move, Space to drop, Escape to cancel.`);
+                  } else if (drag.keyboard) {
+                    commit(drag.from, drag.to);
+                    setAnnouncement(`${getLabel(item)} dropped at position ${drag.to + 1} of ${ids.length}`);
+                    setDrag(null);
+                  }
+                } else if (drag?.keyboard && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+                  e.preventDefault();
+                  const to = Math.min(ids.length - 1, Math.max(0, drag.to + (e.key === "ArrowUp" ? -1 : 1)));
+                  setDrag({ ...drag, to });
+                  announce(drag.id, to);
+                } else if (e.key === "Escape" && drag) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDrag(null);
+                  setAnnouncement(`Reorder cancelled. ${getLabel(item)} is back at position ${drag.from + 1}.`);
+                }
+              }}
+            >
+              {GRIP}
+            </button>
+          );
+          return (
+            <li
+              key={id}
+              ref={(el) => { if (el) rows.current.set(id, el); else rows.current.delete(id); }}
+              style={drag ? { transform: dy ? `translateY(${dy}px)` : undefined, transition: dragging && !drag.keyboard ? "none" : "transform 150ms ease" } : undefined}
+              className={`group/sort relative ${dragging ? "z-10 rounded-xl bg-background [&>*]:bg-hover" : ""} ${itemClassName}`}
+            >
+              {renderItem(item, handle, dragging)}
+            </li>
+          );
+        })}
+      </ul>
+      <p id={helpId} hidden>Press Space to lift, the arrow keys to move, Space to drop.</p>
+      <p className="sr-only" aria-live="assertive">{announcement}</p>
+    </>
   );
+}
+
+interface Measure {
+  tops: number[];
+  heights: number[];
+  /** Pointer y when the drag started. */
+  y: number;
+}
+
+function gapAfter(m: Measure, i: number): number {
+  const next = i + 1 < m.tops.length ? i + 1 : i - 1;
+  if (next < 0) return 0;
+  const [a, b] = next > i ? [i, next] : [next, i];
+  return Math.max(0, m.tops[b] - m.tops[a] - m.heights[a]);
+}
+
+function sameSet(a: string[], b: string[]) {
+  return a.length === b.length && a.every((x) => b.includes(x));
 }
 
 /** Two columns of three dots, as on the phone. */

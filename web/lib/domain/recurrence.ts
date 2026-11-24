@@ -21,7 +21,7 @@ export function weekdaysLabel(mask: number): string {
   for (let i = 0; i < 7; i++) {
     if ((mask & (1 << i)) !== 0) parts.push(WEEKDAY_NAMES[i]);
   }
-  return parts.join(" · ");
+  return parts.join(", ");
 }
 
 /** "every day" / "every 4 days". */

@@ -127,8 +127,8 @@ describe("recurrence (RecurrenceTest)", () => {
   it("recurrence label supports interval and calendar", () => {
     expect(recurrenceLabel(chore(3))).toBe("every 3 days");
     expect(recurrenceLabel(chore(1))).toBe("every day");
-    expect(recurrenceLabel(chore(null, { recur_days: 21 }))).toBe("Mon · Wed · Fri");
-    expect(weekdaysLabel(21)).toBe("Mon · Wed · Fri");
+    expect(recurrenceLabel(chore(null, { recur_days: 21 }))).toBe("Mon, Wed, Fri");
+    expect(weekdaysLabel(21)).toBe("Mon, Wed, Fri");
   });
 });
 
@@ -194,7 +194,7 @@ describe("formatting (Weekdays / WorkoutFormat)", () => {
     expect(mask).toBe(1 | 8);
     expect(hasWeekday(mask, 0)).toBe(true);
     expect(hasWeekday(mask, 1)).toBe(false);
-    expect(weekdaysLabel(mask)).toBe("Mon · Thu");
+    expect(weekdaysLabel(mask)).toBe("Mon, Thu");
     expect(toggleWeekday(mask, 3)).toBe(1);
   });
   it("weights, volume and colours", () => {

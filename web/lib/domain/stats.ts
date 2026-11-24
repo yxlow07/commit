@@ -85,6 +85,47 @@ export function lateness(rows: CompletionRow[]): Map<string, boolean> {
   return result;
 }
 
+/**
+ * How late each completion was, for history notes: days after its due day (1 = "1 day late"),
+ * 0 when late on the due day itself (after a due time), absent when on time or undated.
+ */
+export function lateDaysByCompletion(rows: CompletionRow[]): Map<string, number> {
+  const result = new Map<string, number>();
+  for (const done of groupBy(rows, (r) => r.todoId).values()) {
+    const sorted = [...done].sort((a, b) => a.doneAt - b.doneAt);
+    const first = sorted[0];
+    if (isRecurringRow(first)) {
+      let previous: number | null = null;
+      for (const c of sorted) {
+        const day = startOfDay(c.doneAt);
+        const dueDay = previous != null ? nextDueAfter(first, previous) : firstDueDay(first);
+        if (dueDay != null && day > dueDay) result.set(c.completionId, daysBetween(dueDay, day));
+        previous = day;
+      }
+    } else {
+      for (const c of sorted) {
+        if (c.dueAt == null) continue;
+        const days = daysBetween(c.dueAt, c.doneAt);
+        if (days > 0) result.set(c.completionId, days);
+        else if (c.hasTime && c.doneAt > c.dueAt) result.set(c.completionId, 0);
+      }
+    }
+  }
+  return result;
+}
+
+/** Current streak per chore (todo id), only for chores still on time; 0 streaks left out. */
+export function choreStreaks(rows: CompletionRow[], now: number): Map<string, number> {
+  const late = lateness(rows);
+  const today = startOfDay(now);
+  const result = new Map<string, number>();
+  for (const [todoId, done] of groupBy(rows.filter(isRecurringRow), (r) => r.todoId)) {
+    const n = choreStreak(done, late, today);
+    if (n > 0) result.set(todoId, n);
+  }
+  return result;
+}
+
 export function commitmentStats(rows: CompletionRow[], now: number): CommitmentStats[] {
   const today = startOfDay(now);
   const weekStart = startOfWeek(now);

@@ -18,9 +18,9 @@ export function weekdayIndex(ms: number): number {
   return (new Date(ms).getDay() + 6) % 7;
 }
 
-/** "Mon · Thu", or "" when no day is set. */
+/** "Mon, Thu", or "" when no day is set. */
 export function weekdaysLabel(mask: number): string {
-  return WEEKDAYS.filter((_, i) => hasWeekday(mask, i)).join(" · ");
+  return WEEKDAYS.filter((_, i) => hasWeekday(mask, i)).join(", ");
 }
 
 /** "60 kg", "62.5 kg". */

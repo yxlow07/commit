@@ -30,6 +30,9 @@ async function updateRow<T extends TableName>(qc: QueryClient, table: T, id: str
 
 const softDelete = (qc: QueryClient, table: TableName, id: string) => updateRow(qc, table, id, { deleted: 1 });
 
+/** Undo of a soft delete (the undo toast): the row comes back unchanged. */
+export const restoreRow = (qc: QueryClient, table: TableName, id: string) => updateRow(qc, table, id, { deleted: 0 });
+
 /**
  * Saves [ids] as the new order of [items] (drag to reorder): each row's sort_order becomes its index,
  * writing only rows that changed. Rows of [items] missing from [ids] keep their place after them.

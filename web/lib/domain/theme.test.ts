@@ -133,11 +133,12 @@ describe("theme (ThemeParserTest)", () => {
   it("writes CSS variables from the tokens", () => {
     const css = themeCssVariables(resolveActiveTheme(BUILTIN_LIGHT, []));
     expect(css).toContain("color-scheme: light;");
-    expect(css).toContain("--fg: #1F2123;");
-    expect(css).toContain("--primary: #1F2123;");
+    expect(css).toContain("--ink: #1F2123;");
+    expect(css).toContain("--on-ink: #FFFFFF;");
     expect(css).toContain("--danger: #B42318;");
-    expect(css).toContain("--radius: 16px;");
-    expect(webRadius(28)).toBe(16);
+    expect(css).toContain("--radius-dialog: 20px;");
+    expect(css).not.toContain("--fg");
+    expect(webRadius(28)).toBe(20);
   });
 
   it("writes #AARRGGBB theme colours as CSS #RRGGBBAA", () => {

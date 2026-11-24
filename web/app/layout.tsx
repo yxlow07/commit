@@ -1,21 +1,21 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { Geist, Geist_Mono, Nunito } from "next/font/google";
+import { Hanken_Grotesk, Nunito } from "next/font/google";
 import { AppShell, Splash } from "@/components/AppShell";
 import "./globals.css";
 
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+/** The app's one family (App Design Spec, "Type"); Nunito only for themes that ask for "rounded". */
+const hanken = Hanken_Grotesk({ variable: "--font-hanken", subsets: ["latin"], weight: ["300", "400", "500", "600", "700"] });
 const nunito = Nunito({ variable: "--font-nunito", subsets: ["latin"] });
 
+/** No title here: the app shell renders <title> per page (React 19 hoists it into <head>). */
 export const metadata: Metadata = {
-  title: "Commit",
-  description: "Todos, chores and workouts, in sync with the Commit Android app.",
+  description: "Your commitments, on your phone and here.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} ${nunito.variable} h-full antialiased`}>
+    <html lang="en" className={`${hanken.variable} ${nunito.variable} h-full antialiased`}>
       <body className="min-h-full">
         {/* The app is browser-only (session in localStorage); the static build ships this fallback. */}
         <Suspense fallback={<Splash />}>

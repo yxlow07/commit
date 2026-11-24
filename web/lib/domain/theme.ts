@@ -216,77 +216,60 @@ export function cssColor(color: string): string {
 }
 
 /**
- * The web's component radius for a theme. `cornerRadius` is the phone's widget/dialog radius (28 by
- * default); web cards and fields use about 4/7 of it, which keeps the default at the web's 16 px.
+ * The web's dialog radius for a theme. `cornerRadius` is the phone's widget/dialog radius (28 by
+ * default); web dialogs and the edit panel's form use 5/7 of it, which keeps the default at 20 px.
  */
 export function webRadius(cornerRadius: number): number {
-  return Math.round((cornerRadius * 4) / 7);
+  return Math.round((cornerRadius * 5) / 7);
 }
 
-/** Formats CSS variables for light and dark modes based on the active theme. */
+/** CSS variables for one colour set, named after the theme tokens (web spec, "CSS variables"). */
+function tokenVars(c: ThemeColors, dark: boolean): string {
+  return [
+    `--ink: ${cssColor(c.ink)};`,
+    `--on-ink: ${cssColor(c.onInk)};`,
+    `--text-strong: ${cssColor(c.textStrong)};`,
+    `--muted: ${cssColor(c.muted)};`,
+    `--faint: ${cssColor(c.faint)};`,
+    `--track: ${cssColor(c.track)};`,
+    `--fill: ${cssColor(c.fill)};`,
+    `--surface: ${cssColor(c.surface)};`,
+    `--background: ${cssColor(c.background)};`,
+    `--danger: ${cssColor(c.danger)};`,
+    `--scrim: ${cssColor(c.scrim)};`,
+    `--hover: color-mix(in srgb, var(--ink) ${dark ? 8 : 5}%, transparent);`,
+  ].join("\n      ");
+}
+
+/** The active theme as CSS on :root (light, dark, or both for Automatic). */
 export function themeCssVariables(theme: ActiveTheme): string {
   const { spec, mode } = theme;
+  const font =
+    spec.font === "serif" ? "Georgia, serif"
+      : spec.font === "mono" ? "ui-monospace, monospace"
+        : spec.font === "rounded" ? "var(--font-nunito), system-ui, sans-serif"
+          : "var(--font-hanken), system-ui, sans-serif";
+  const common = `--radius-dialog: ${webRadius(spec.cornerRadius)}px;
+      --font-theme: ${font};`;
 
-  function toVars(c: ThemeColors): string {
-    return `
-      --bg: ${cssColor(c.background)};
-      --surface: ${cssColor(c.surface)};
-      --surface-2: ${cssColor(c.fill)};
-      --surface-3: ${cssColor(c.track)};
-      --line: ${cssColor(c.track)};
-      --fg: ${cssColor(c.ink)};
-      --fg-muted: ${cssColor(c.muted)};
-      --primary: ${cssColor(c.ink)};
-      --primary-soft: ${cssColor(c.fill)};
-      --on-primary: ${cssColor(c.onInk)};
-      --danger: ${cssColor(c.danger)};
-    `.trim();
-  }
-
-  const fontVal =
-    spec.font === "serif"
-      ? "serif"
-      : spec.font === "mono"
-      ? "monospace"
-      : spec.font === "rounded"
-      ? "var(--font-nunito), system-ui, sans-serif"
-      : "var(--font-geist-sans), system-ui, sans-serif";
-
-  const commonVars = `
-    --radius: ${webRadius(spec.cornerRadius)}px;
-    --font-theme: ${fontVal};
-  `.trim();
-
-  if (mode === "light") {
-    return `
-      :root {
-        color-scheme: light;
-        ${commonVars}
-        ${toVars(spec.light)}
-      }
-    `;
-  }
-
-  if (mode === "dark") {
-    return `
-      :root {
-        color-scheme: dark;
-        ${commonVars}
-        ${toVars(spec.dark)}
-      }
-    `;
-  }
-
-  return `
-    :root {
+  if (mode === "light") return `:root {
+      color-scheme: light;
+      ${common}
+      ${tokenVars(spec.light, false)}
+    }`;
+  if (mode === "dark") return `:root {
+      color-scheme: dark;
+      ${common}
+      ${tokenVars(spec.dark, true)}
+    }`;
+  return `:root {
       color-scheme: light dark;
-      ${commonVars}
-      ${toVars(spec.light)}
+      ${common}
+      ${tokenVars(spec.light, false)}
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        ${toVars(spec.dark)}
+        ${tokenVars(spec.dark, true)}
       }
-    }
-  `;
+    }`;
 }
