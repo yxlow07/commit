@@ -58,7 +58,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.yxuan.commit.data.db.dao.SessionSummary
 import dev.yxuan.commit.data.db.entity.ExerciseEntity
+import dev.yxuan.commit.ui.components.IconAction
+import dev.yxuan.commit.ui.theme.tnum
 import dev.yxuan.commit.data.repo.ExerciseInput
 import dev.yxuan.commit.domain.Weekdays
 import dev.yxuan.commit.ui.AppViewModelFactory
@@ -83,10 +86,13 @@ import java.util.Locale
 @Composable
 fun RoutineEditorScreen(
     onBack: () -> Unit,
+    onOpenSession: (String) -> Unit,
     viewModel: RoutineEditorViewModel = viewModel(factory = AppViewModelFactory),
 ) {
     val routine by viewModel.routine.collectAsStateWithLifecycle()
     val exercises by viewModel.exercises.collectAsStateWithLifecycle()
+    val sessions by viewModel.sessions.collectAsStateWithLifecycle()
+    var deletingSession by remember { mutableStateOf<SessionSummary?>(null) }
     var name by rememberSaveable { mutableStateOf<String?>(null) }
     var rest by rememberSaveable { mutableStateOf<String?>(null) }
     var planned by rememberSaveable { mutableStateOf<Int?>(null) }
@@ -164,6 +170,32 @@ fun RoutineEditorScreen(
             item {
                 TextAction("Add exercise", onClick = { adding = true }, modifier = Modifier.padding(top = Space.s).offset(x = (-12).dp))
             }
+            // Past sessions of this routine, newest first: tap to see or fix the sets, trash to delete.
+            item(key = "history-heading") {
+                SectionHeading("History", Modifier.padding(top = Space.section))
+                if (sessions?.isEmpty() == true) {
+                    Text("No sessions yet. Finished workouts of this routine show here.", style = Commit.type.body, color = c.textStrong, modifier = Modifier.padding(vertical = Space.s))
+                }
+            }
+            items(sessions.orEmpty(), key = { "s-" + it.session.id }) { s ->
+                Row(
+                    Modifier.animateItem().fillMaxWidth().heightIn(min = Space.rowApp).clickable { onOpenSession(s.session.id) },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
+                        Text("${WorkoutFormat.sessionDate(s)}, ${WorkoutFormat.sessionTime(s)}", style = Commit.type.body.tnum(), color = c.ink)
+                        Text("${WorkoutFormat.sessionMeta(s)}, ${WorkoutFormat.volume(s.volume)}", style = Commit.type.meta.tnum(), color = c.muted)
+                    }
+                    IconAction(Glyph.Trash, "Delete session of ${WorkoutFormat.sessionDate(s)}, ${WorkoutFormat.sessionTime(s)}", { deletingSession = s }, tint = c.muted, glyphSize = 18.dp, modifier = Modifier.offset(x = 12.dp))
+                }
+            }
+        }
+    }
+
+    deletingSession?.let { s ->
+        DeleteSessionDialog(s, onDismiss = { deletingSession = null }) {
+            viewModel.deleteSession(s.session.id)
+            deletingSession = null
         }
     }
 
@@ -283,4 +315,24 @@ private fun NumberField(label: String, value: String, onChange: (String) -> Unit
         modifier = modifier,
         centered = true,
     )
+}
+
+/** "Delete this session?": the sets go too, from History, recaps and progress, on every device. */
+@Composable
+fun DeleteSessionDialog(session: SessionSummary, onDismiss: () -> Unit, onDelete: () -> Unit) {
+    val sets = session.setCount
+    CommitDialog(
+        title = "Delete ${session.routineName}, ${WorkoutFormat.sessionDate(session)} ${WorkoutFormat.sessionTime(session)}?",
+        onDismiss = onDismiss,
+        actions = {
+            TextAction("Cancel", onClick = onDismiss)
+            PrimaryButton("Delete session", onClick = onDelete)
+        },
+    ) {
+        Text(
+            "Removes the session and its ${if (sets == 1) "1 set" else "$sets sets"} from History and progress. You can't undo this.",
+            style = Commit.type.body,
+            color = Commit.colors.textStrong,
+        )
+    }
 }

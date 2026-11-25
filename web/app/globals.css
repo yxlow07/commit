@@ -65,26 +65,38 @@
   --color-hover: var(--hover);
   --font-sans: var(--font-theme);
 
-  /* Type scale (rem, root 16 px). */
-  --text-display-xl: 4.5rem;
+  /* Type scale: the app's (CommitType in Tokens.kt), in rem at a 16 px root. */
+  --text-display-xl: 6rem;
   --text-display-xl--line-height: 1;
-  --text-display-xl--letter-spacing: -0.04em;
+  --text-display-xl--letter-spacing: -0.031em;
   --text-display-xl--font-weight: 300;
-  --text-display-l: 3.5rem;
-  --text-display-l--line-height: 1.1;
-  --text-display-l--letter-spacing: -0.03em;
+  --text-display-l: 4rem;
+  --text-display-l--line-height: 1;
+  --text-display-l--letter-spacing: -0.031em;
   --text-display-l--font-weight: 300;
-  --text-title-screen: 2.25rem;
+  --text-display-m: 3rem;
+  --text-display-m--line-height: 1;
+  --text-display-m--font-weight: 300;
+  --text-title-screen: 2.5rem;
   --text-title-screen--line-height: 1.1;
-  --text-title-screen--letter-spacing: -0.02em;
+  --text-title-screen--letter-spacing: -0.025em;
   --text-title-screen--font-weight: 700;
+  /* The selected tab of a row of names, like the widget's (light, large). */
+  --text-tab: 1.875rem;
+  --text-tab--line-height: 1.1;
+  --text-tab--letter-spacing: -0.033em;
+  --text-tab--font-weight: 300;
+  /* Dialog titles and the app's big row titles (commitments, routines). */
   --text-title-section: 1.25rem;
-  --text-title-section--line-height: 1.25;
-  --text-title-section--font-weight: 600;
+  --text-title-section--line-height: 1.3;
+  --text-title-section--font-weight: 700;
+  --text-row: 1.25rem;
+  --text-row--line-height: 1.3;
+  --text-row--font-weight: 500;
   --text-body-l: 1.0625rem;
   --text-body-l--line-height: 1.45;
   --text-body: 1rem;
-  --text-body--line-height: 1.45;
+  --text-body--line-height: 1.4;
   --text-label: 0.9375rem;
   --text-label--line-height: 1.3;
   --text-label--font-weight: 500;

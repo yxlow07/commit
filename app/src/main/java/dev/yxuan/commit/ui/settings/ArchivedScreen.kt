@@ -82,7 +82,7 @@ fun ArchivedScreen(
             ) {
                 Column(Modifier.weight(1f).padding(vertical = Space.xs)) {
                     Text(commitment.name, style = Commit.type.body, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(if (commitment.type == CommitmentType.WORKOUT) "Workouts" else "Todos", style = Commit.type.meta, color = c.muted)
+                    Text(when (commitment.type) { CommitmentType.WORKOUT -> "Workouts"; CommitmentType.COLLECTION -> "Collection"; CommitmentType.STANDARD -> "Todos" }, style = Commit.type.meta, color = c.muted)
                 }
                 TextAction("Restore", onClick = { viewModel.restore(commitment.id) })
             }

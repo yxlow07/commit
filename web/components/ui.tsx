@@ -4,6 +4,7 @@ import {
   useEffect, useId, useRef, useState,
   type ButtonHTMLAttributes, type ComponentProps, type KeyboardEvent, type ReactNode, type SelectHTMLAttributes,
 } from "react";
+import Link from "next/link";
 
 /**
  * Shared components (App Design Spec "Components", web spec "Web components"). Every colour is a
@@ -15,17 +16,17 @@ import {
 type Variant = "primary" | "secondary" | "text" | "quiet";
 
 const variants: Record<Variant, string> = {
-  primary: "h-11 px-5 bg-ink text-on-ink hover:bg-ink/88",
-  secondary: "h-11 px-5 bg-fill text-ink hover:bg-hover",
-  text: "h-9 px-2.5 font-bold text-ink hover:bg-hover",
-  quiet: "h-9 px-2.5 text-muted hover:bg-hover",
+  primary: "h-12 px-6 text-body font-medium bg-ink text-on-ink hover:bg-ink/88",
+  secondary: "h-12 px-6 text-body font-medium bg-fill text-ink hover:bg-hover",
+  text: "h-11 px-3 text-body font-bold text-ink hover:bg-hover",
+  quiet: "h-11 px-3 text-body text-muted hover:bg-hover",
 };
 
 export function Button({ variant = "secondary", className = "", ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
   return (
     <button
       type="button"
-      className={`inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-xl text-label disabled:cursor-not-allowed disabled:opacity-45 ${variants[variant]} ${className}`}
+      className={`inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-xl disabled:cursor-not-allowed disabled:opacity-45 ${variants[variant]} ${className}`}
       {...props}
     />
   );
@@ -61,14 +62,14 @@ export function IconTile({ label, className = "", children, ...props }: ButtonHT
   );
 }
 
-/** Primary round add: ink square, plus in on-ink. */
+/** Primary add: a 56 px `ink` square (12 px corners) with an `on-ink` plus, as in the app. */
 export function RoundAdd({ label, className = "", ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { label: string }) {
   return (
     <button
       type="button"
       aria-label={label}
       title={label}
-      className={`inline-flex size-12 shrink-0 cursor-pointer items-center justify-center rounded-xl bg-ink text-on-ink hover:bg-ink/88 ${className}`}
+      className={`inline-flex size-14 shrink-0 cursor-pointer items-center justify-center rounded-xl bg-ink text-on-ink hover:bg-ink/88 ${className}`}
       {...props}
     >
       {Icons.plus}
@@ -89,11 +90,11 @@ export function SelectField({ className = "", ...props }: SelectHTMLAttributes<H
   return <select className={`${fieldClass} cursor-pointer pr-8 ${className}`} {...props} />;
 }
 
-/** Label above a control in `caption` `muted`. */
+/** Label above a control in `meta` `muted`. */
 export function Field({ label, children, className = "", htmlFor }: { label: string; children: ReactNode; className?: string; htmlFor?: string }) {
   return (
     <div className={`flex flex-col gap-1.5 ${className}`}>
-      <label htmlFor={htmlFor} className="text-caption text-muted">{label}</label>
+      <label htmlFor={htmlFor} className="text-meta text-muted">{label}</label>
       {children}
     </div>
   );
@@ -104,7 +105,7 @@ export function FieldGroup({ label, children, className = "" }: { label: string;
   const id = useId();
   return (
     <div role="group" aria-labelledby={id} className={`flex flex-col gap-1.5 ${className}`}>
-      <span id={id} className="text-caption text-muted">{label}</span>
+      <span id={id} className="text-meta text-muted">{label}</span>
       {children}
     </div>
   );
@@ -200,8 +201,19 @@ export function TextTabs<T extends string>({ items, value, onChange, label, size
   );
 }
 
+/** A list's heading, as in the app: `body` Regular `muted` (`danger` for Overdue). */
 export function SectionHeading({ children, danger, className = "", id }: { children: ReactNode; danger?: boolean; className?: string; id?: string }) {
-  return <h2 id={id} className={`text-caption ${danger ? "text-danger" : "text-muted"} ${className}`}>{children}</h2>;
+  return <h2 id={id} className={`text-body font-normal ${danger ? "text-danger" : "text-muted"} ${className}`}>{children}</h2>;
+}
+
+/** A section heading with icon actions (+, pencil) on the right, 44 px tall. */
+export function SectionHeader({ title, children, className = "", id }: { title: ReactNode; children?: ReactNode; className?: string; id?: string }) {
+  return (
+    <div className={`flex min-h-11 items-center gap-1 ${className}`}>
+      <SectionHeading id={id} className="min-w-0 flex-1 truncate">{title}</SectionHeading>
+      {children && <div className="-mr-3 flex items-center">{children}</div>}
+    </div>
+  );
 }
 
 /** Forms only: fill track (radius 14, 3 px padding), selected segment on surface in bold. */
@@ -238,7 +250,7 @@ export function Stepper({ label, value, onChange, step, min = 0, max = 9999, for
   const btn = "flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-xl bg-fill text-[22px] font-normal text-ink hover:bg-hover disabled:cursor-not-allowed disabled:opacity-40";
   return (
     <div role="group" aria-label={label} className="flex flex-col gap-1.5">
-      <span className="text-caption text-muted">{label}</span>
+      <span className="text-meta text-muted">{label}</span>
       <div className="flex items-center gap-2">
         <button type="button" className={btn} aria-label={`Less ${label.toLowerCase()}`} disabled={value <= min} onClick={() => onChange(clamp(value - step))}>−</button>
         <div className="flex min-w-16 flex-1 flex-col items-center" aria-live="polite">
@@ -387,17 +399,30 @@ export function ErrorText({ error }: { error: unknown }) {
   return <p role="alert" className="text-meta text-danger">{errorMessage(error)}</p>;
 }
 
-/** Page title in title.screen with an optional one-line summary in meta muted. */
+/**
+ * Page title as in the app: `title.screen` (40 Bold), actions beside it, and the one-line summary
+ * below in `body.l` `text-strong` ("3 open, 1 overdue.").
+ */
 export function PageTitle({ title, summary, children, before }: { title: ReactNode; summary?: ReactNode; children?: ReactNode; before?: ReactNode }) {
   return (
-    <header className="flex flex-col gap-1.5">
+    <header className="flex flex-col">
       {before}
       <div className="flex min-w-0 items-center gap-2">
         <h1 className="min-w-0 truncate text-title-screen">{title}</h1>
         {children}
       </div>
-      {summary && <p className="text-meta text-muted">{summary}</p>}
+      {summary && <p className="mt-5 text-body-l text-text-strong">{summary}</p>}
     </header>
+  );
+}
+
+/** "‹ Commitments" above a pushed page's title, like the app's back arrow with where it goes. */
+export function BackLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Link href={href} className="-ml-2 mb-4 flex h-11 items-center gap-1 self-start rounded-xl pl-1 pr-3 text-body text-muted hover:bg-hover hover:text-ink">
+      {Icons.left}
+      {label}
+    </Link>
   );
 }
 
@@ -458,6 +483,11 @@ const svg = (path: ReactNode, size = 18) => (
 export const Icons = {
   plus: svg(<path d="M12 5v14M5 12h14" />, 20),
   pencil: svg(<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16zM13.5 6.5l4 4" />),
+  grip: (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden>
+      {[8, 16].flatMap((x) => [6, 12, 18].map((y) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.6" />))}
+    </svg>
+  ),
   trash: svg(<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />),
   archive: svg(<path d="M3 4h18v4H3zM5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4" />),
   chevron: svg(<path d="m9 6 6 6-6 6" />, 16),

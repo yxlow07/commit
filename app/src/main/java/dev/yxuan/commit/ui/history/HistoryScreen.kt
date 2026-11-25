@@ -26,6 +26,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.layout.offset
+import dev.yxuan.commit.ui.components.Glyph
+import dev.yxuan.commit.ui.components.IconAction
+import dev.yxuan.commit.ui.workout.DeleteSessionDialog
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -39,6 +44,7 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -46,6 +52,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.yxuan.commit.data.db.dao.CompletionRow
 import dev.yxuan.commit.data.db.dao.ExerciseSessionPoint
 import dev.yxuan.commit.data.db.dao.SessionSummary
+import androidx.compose.foundation.lazy.LazyItemScope
+import androidx.compose.ui.text.font.FontWeight
 import dev.yxuan.commit.domain.Stats
 import dev.yxuan.commit.ui.AppViewModelFactory
 import dev.yxuan.commit.ui.components.ScreenPadding
@@ -74,6 +82,7 @@ private const val HEATMAP_WEEKS = 12
 @Composable
 fun HistoryScreen(
     onOpenSession: (String) -> Unit,
+    onOpenDay: (LocalDate) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: HistoryViewModel = viewModel(factory = AppViewModelFactory),
 ) {
@@ -83,6 +92,8 @@ fun HistoryScreen(
     val points by viewModel.exercisePoints.collectAsStateWithLifecycle()
     var filter by rememberSaveable { mutableStateOf<String?>(null) }
     var exercise by rememberSaveable { mutableStateOf<String?>(null) }
+    var byRoutine by rememberSaveable { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf<SessionSummary?>(null) }
 
     LazyColumn(modifier.fillMaxSize(), contentPadding = ScreenPadding) {
         item {
@@ -92,14 +103,21 @@ fun HistoryScreen(
             }
             Spacer(Modifier.height(Space.l))
         }
-        if (tab == 0) tasks(completions.orEmpty(), filter, { filter = it }, viewModel.clock)
-        else workouts(points, sessions.orEmpty(), exercise, { exercise = it }, onOpenSession, viewModel.clock)
+        if (tab == 0) tasks(completions.orEmpty(), filter, { filter = it }, viewModel.clock, onOpenDay)
+        else workouts(points, sessions.orEmpty(), exercise, { exercise = it }, onOpenSession, viewModel.clock, byRoutine, { byRoutine = it }, { deleting = it })
+    }
+
+    deleting?.let { s ->
+        DeleteSessionDialog(s, onDismiss = { deleting = null }) {
+            viewModel.deleteSession(s.session.id)
+            deleting = null
+        }
     }
 }
 
 // ---- Tasks ----
 
-private fun LazyListScope.tasks(rows: List<CompletionRow>, filter: String?, onFilter: (String?) -> Unit, clock: Clock) {
+private fun LazyListScope.tasks(rows: List<CompletionRow>, filter: String?, onFilter: (String?) -> Unit, clock: Clock, onOpenDay: (LocalDate) -> Unit) {
     val commitments = rows.distinctBy { it.commitmentId }.map { it.commitmentId to it.commitmentName }
     val shown = if (filter == null) rows else rows.filter { it.commitmentId == filter }
     item {
@@ -111,7 +129,7 @@ private fun LazyListScope.tasks(rows: List<CompletionRow>, filter: String?, onFi
             }
             Spacer(Modifier.height(Space.m))
         }
-        Heatmap(shown, clock)
+        Heatmap(shown, clock, onOpenDay)
         Spacer(Modifier.height(Space.section))
     }
     if (shown.isEmpty()) {
@@ -146,9 +164,12 @@ private fun LazyListScope.tasks(rows: List<CompletionRow>, filter: String?, onFi
     }
 }
 
-/** 12 columns (weeks, oldest left) × 7 rows (Mon–Sun), 3 dp gaps, radius 3, five shades. */
+/**
+ * 12 columns (weeks, oldest left) × 7 rows (Mon–Sun), 3 dp gaps, radius 3, five shades. Tapping a
+ * day opens its recap (what got done, the workouts, what was missed).
+ */
 @Composable
-private fun Heatmap(rows: List<CompletionRow>, clock: Clock) {
+private fun Heatmap(rows: List<CompletionRow>, clock: Clock, onOpenDay: (LocalDate) -> Unit) {
     val c = Commit.colors
     val today = LocalDate.now(clock)
     val thisMonday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
@@ -159,7 +180,7 @@ private fun Heatmap(rows: List<CompletionRow>, clock: Clock) {
     val shades = c.heat
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Column(
-            Modifier.semantics { contentDescription = "Tasks finished per day, last $HEATMAP_WEEKS weeks. $thisWeek this week." },
+            Modifier.semantics { contentDescription = "Tasks finished per day, last $HEATMAP_WEEKS weeks. $thisWeek this week. Tap a day for its recap." },
             verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             for (dow in 0 until 7) {
@@ -168,9 +189,15 @@ private fun Heatmap(rows: List<CompletionRow>, clock: Clock) {
                         val day = start.plusWeeks(week.toLong()).plusDays(dow.toLong())
                         val n = counts[day] ?: 0
                         val level = if (n == 0 || max == 0) 0 else ceil(n * 4.0 / max).toInt().coerceIn(1, 4)
+                        val future = day.isAfter(today)
                         Box(
                             Modifier.weight(1f).aspectRatio(1f).clip(RoundedCornerShape(Commit.shapes.heatCell))
-                                .background(if (day.isAfter(today)) c.background else shades[level])
+                                .background(if (future) c.background else shades[level])
+                                .then(
+                                    if (future) Modifier
+                                    else Modifier.clickable(onClickLabel = "Open recap") { onOpenDay(day) }
+                                        .semantics { contentDescription = "${DueLabels.date(day)}, $n finished" }
+                                )
                         )
                     }
                 }
@@ -178,7 +205,8 @@ private fun Heatmap(rows: List<CompletionRow>, clock: Clock) {
         }
         Row(Modifier.fillMaxWidth()) {
             Text("$HEATMAP_WEEKS weeks ago", style = Commit.type.micro, color = c.muted, modifier = Modifier.weight(1f))
-            Text("This week", style = Commit.type.micro, color = c.muted)
+            Text("Tap a day for its recap", style = Commit.type.micro, color = c.muted, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+            Text("This week", style = Commit.type.micro, color = c.muted, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
         }
         // Legend: this week's count, then a Less-to-More gradient through the heatmap's shades.
         Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -208,6 +236,9 @@ private fun LazyListScope.workouts(
     onSelect: (String) -> Unit,
     onOpenSession: (String) -> Unit,
     clock: Clock,
+    byRoutine: Boolean,
+    onByRoutine: (Boolean) -> Unit,
+    onDelete: (SessionSummary) -> Unit,
 ) {
     // Exercises by most recent use.
     val names = points.sortedByDescending { it.startedAt }.map { it.exerciseName }.distinct()
@@ -226,18 +257,40 @@ private fun LazyListScope.workouts(
         item { Text("No workouts logged yet.", style = Commit.type.body, color = Commit.colors.textStrong) }
         return
     }
-    item { SectionHeading("Sessions") }
-    items(sessions, key = { it.session.id }) { s ->
-        Row(
-            Modifier.fillMaxWidth().heightIn(min = Space.rowApp).clickable { onOpenSession(s.session.id) },
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
-                Text(s.routineName, style = Commit.type.body, color = Commit.colors.ink)
-                Text(WorkoutFormat.sessionMeta(s), style = Commit.type.meta.tnum(), color = Commit.colors.muted)
-            }
-            Text(WorkoutFormat.sessionDate(s, clock.zone), style = Commit.type.meta.tnum(), color = Commit.colors.muted)
+    // Every session newest first, or grouped under each routine (routines by their latest session).
+    item(key = "sessions-toggle") {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+            SectionHeading("Workouts", Modifier.weight(1f))
+            TextTabs(listOf("Sessions", "By routine"), if (byRoutine) 1 else 0, { onByRoutine(it == 1) }, style = Commit.type.label, gap = 18.dp)
         }
+    }
+    if (!byRoutine) {
+        items(sessions, key = { it.session.id }) { s -> SessionRow(s, s.routineName, clock, onOpenSession, onDelete) }
+    } else {
+        sessions.groupBy { it.session.routineId }.forEach { (routineId, list) ->
+            item(key = "routine-$routineId") {
+                Text(list.first().routineName, style = Commit.type.body.copy(fontWeight = FontWeight.Bold), color = Commit.colors.ink, modifier = Modifier.padding(top = Space.l, bottom = Space.xs))
+            }
+            items(list, key = { "r-" + it.session.id }) { s -> SessionRow(s, null, clock, onOpenSession, onDelete) }
+        }
+    }
+}
+
+/** One session: the routine (or, grouped by routine, the date) over "52 min, 16 sets, 3,450 kg"; bin to delete. */
+@Composable
+private fun LazyItemScope.SessionRow(s: SessionSummary, title: String?, clock: Clock, onOpen: (String) -> Unit, onDelete: (SessionSummary) -> Unit) {
+    val c = Commit.colors
+    val whenText = "${WorkoutFormat.sessionDate(s, clock.zone)}, ${WorkoutFormat.sessionTime(s, clock.zone)}"
+    Row(
+        Modifier.animateItem().fillMaxWidth().heightIn(min = Space.rowApp).clickable { onOpen(s.session.id) },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
+            Text(title ?: whenText, style = Commit.type.body.tnum(), color = c.ink)
+            val meta = "${WorkoutFormat.sessionMeta(s)}, ${WorkoutFormat.volume(s.volume)}"
+            Text(if (title != null) "$whenText, $meta" else meta, style = Commit.type.meta.tnum(), color = c.muted)
+        }
+        IconAction(Glyph.Trash, "Delete ${s.routineName} session of $whenText", { onDelete(s) }, tint = c.muted, glyphSize = 18.dp, modifier = Modifier.offset(x = 12.dp))
     }
 }
 

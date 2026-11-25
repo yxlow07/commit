@@ -11,9 +11,9 @@ import type { Settings } from "@/lib/domain/types";
 import { OFFLINE_REASON, useOnline } from "@/components/Online";
 import { TimeButton } from "@/components/Pickers";
 import { useToast } from "@/components/Toast";
-import { Button, Dialog, EmptyText, Field, IconButton, Icons, Loading, Switch, TextField, useNow } from "@/components/ui";
+import { Button, Dialog, Field, IconButton, Icons, Loading, SectionHeading, Switch, TextField, useNow } from "@/components/ui";
 
-/** Settings (web spec, "Settings"): one page, sections 48 px apart. */
+/** Settings, laid out like the app's: quiet section headings over rows. */
 export default function SettingsPage() {
   usePageTitle("Settings");
   const user = useUser();
@@ -31,10 +31,10 @@ export default function SettingsPage() {
       .catch(() => toast({ message: "Couldn't save. Check your connection.", action: { label: "Try again", run: () => save(changes) } }));
 
   return (
-    <div className="flex flex-col gap-12">
+    <div className="flex flex-col gap-10">
       <h1 className="text-title-screen">Settings</h1>
 
-      <Section title="Recaps" aside={saved ? <SavedNote key={saved} /> : null}>
+      <Section title="Daily recaps" aside={saved ? <SavedNote key={saved} /> : null}>
         <RecapRow label="Morning recap" hint="Today's plan" minutes={s.morning_recap_time} enabled={s.morning_recap_enabled === 1}
           onTime={(m) => save({ morning_recap_time: m })} onToggle={(on) => save({ morning_recap_enabled: on ? 1 : 0 })} />
         <RecapRow label="Night recap" hint="Today's wins, tomorrow's plan" minutes={s.night_recap_time} enabled={s.night_recap_enabled === 1}
@@ -46,9 +46,12 @@ export default function SettingsPage() {
       <ArchivedSection />
 
       <Section title="Account">
-        <div className="flex items-center justify-between gap-3">
-          <span className="min-w-0 truncate text-body">{user.email}</span>
-          <Button variant="text" onClick={() => supabase.auth.signOut()}>Sign out</Button>
+        <div className="flex min-h-16 items-center justify-between gap-3">
+          <span className="min-w-0">
+            <span className="block truncate text-body-l">{user.email}</span>
+            <span className="block text-body text-muted">Synced with the phone app.</span>
+          </span>
+          <Button variant="text" className="-mr-3" onClick={() => supabase.auth.signOut()}>Sign out</Button>
         </div>
       </Section>
     </div>
@@ -57,9 +60,9 @@ export default function SettingsPage() {
 
 function Section({ title, aside, children }: { title: string; aside?: ReactNode; children: ReactNode }) {
   return (
-    <section className="flex flex-col gap-3">
+    <section className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between">
-        <h2 className="text-title-section">{title}</h2>
+        <SectionHeading>{title}</SectionHeading>
         {aside}
       </div>
       {children}
@@ -74,7 +77,7 @@ function SavedNote() {
     const t = setTimeout(() => setShown(false), 2000);
     return () => clearTimeout(t);
   }, []);
-  return <span role="status" className={`text-micro text-muted transition-opacity duration-300 ${shown ? "opacity-100" : "opacity-0"}`}>Saved</span>;
+  return <span role="status" className={`text-meta text-muted transition-opacity duration-300 ${shown ? "opacity-100" : "opacity-0"}`}>Saved</span>;
 }
 
 function RecapRow({ label, hint, minutes, enabled, onTime, onToggle }: {
@@ -83,10 +86,10 @@ function RecapRow({ label, hint, minutes, enabled, onTime, onToggle }: {
   const now = useNow();
   const online = useOnline();
   return (
-    <div className="flex min-h-14 items-center gap-3">
+    <div className="flex min-h-[72px] items-center gap-3">
       <div className="min-w-0 flex-1">
-        <p className="text-body">{label}</p>
-        <p className="text-meta text-muted">{hint}</p>
+        <p className="text-body-l">{label}</p>
+        <p className="text-body text-muted">{hint}</p>
       </div>
       <TimeButton label={`${label} time`} value={minutes} now={now} onChange={(m) => m !== minutes && onTime(m)} />
       <Switch label={label} checked={enabled} disabled={!online} onChange={onToggle} />
@@ -109,7 +112,7 @@ function ThemeSection({ activeId, onSelect, userId }: { activeId: string | null;
 
   const selectedId = !activeId || activeId === BUILTIN_LEGACY_DYNAMIC ? BUILTIN_AUTOMATIC : activeId;
   const options = [
-    { id: BUILTIN_AUTOMATIC, name: "Automatic", source: "Default", colors: THEME_DEFAULTS.light },
+    { id: BUILTIN_AUTOMATIC, name: "Automatic", source: "Follows your system", colors: THEME_DEFAULTS.light, night: THEME_DEFAULTS.dark },
     { id: BUILTIN_LIGHT, name: "Light", source: "Built in", colors: THEME_DEFAULTS.light },
     { id: BUILTIN_DARK, name: "Dark", source: "Built in", colors: THEME_DEFAULTS.dark },
     ...(themesQ.data ?? []).map((t) => ({ id: t.id, name: t.name, source: "Imported file", colors: parseThemeOrNull(t.json)?.light ?? THEME_DEFAULTS.light })),
@@ -147,20 +150,20 @@ function ThemeSection({ activeId, onSelect, userId }: { activeId: string | null;
   }
 
   return (
-    <Section title="Theme">
+    <Section title="Appearance">
       <ThemePreview />
       <div role="radiogroup" aria-label="Theme" className="flex flex-col">
         {options.map((o) => {
           const selected = o.id === selectedId;
           const imported = o.source === "Imported file";
           return (
-            <div key={o.id} className="group flex items-center rounded-xl hover:bg-hover">
+            <div key={o.id} className="group -mx-3 flex items-center rounded-xl hover:bg-hover">
               <button type="button" role="radio" aria-checked={selected} onClick={() => onSelect(o.id === BUILTIN_AUTOMATIC ? null : o.id)}
-                className="flex min-h-14 min-w-0 flex-1 cursor-pointer items-center gap-3 px-2 text-left">
-                <Swatch colors={o.colors} />
+                className="flex min-h-16 min-w-0 flex-1 cursor-pointer items-center gap-4 px-3 text-left">
+                <Swatch colors={o.colors} night={"night" in o ? o.night : undefined} />
                 <span className="min-w-0 flex-1">
-                  <span className={`block truncate text-body ${selected ? "font-bold" : ""}`}>{o.name}</span>
-                  <span className="block text-meta text-muted">{o.source}</span>
+                  <span className={`block truncate text-body-l ${selected ? "font-bold" : ""}`}>{o.name}</span>
+                  <span className="block text-body text-muted">{o.source}</span>
                 </span>
                 {selected && <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>}
               </button>
@@ -183,7 +186,7 @@ function ThemeSection({ activeId, onSelect, userId }: { activeId: string | null;
 
       <input ref={fileRef} type="file" accept=".json,application/json" className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; if (f) f.text().then(importJson); e.target.value = ""; }} />
-      <div className="flex flex-wrap gap-2">
+      <div className="mt-2 flex flex-wrap gap-2">
         <Button variant="primary" disabled={busy || !online} title={online ? undefined : OFFLINE_REASON} onClick={() => fileRef.current?.click()}>Import file</Button>
         <Button variant="secondary" disabled={busy || !online} title={online ? undefined : OFFLINE_REASON} onClick={() => { setError(null); setLinkOpen(true); }}>Import from link</Button>
       </div>
@@ -206,19 +209,29 @@ function ThemeSection({ activeId, onSelect, userId }: { activeId: string | null;
   );
 }
 
-/** 28 px swatch: the theme's surface with a 10 px dot of its text colour. */
-function Swatch({ colors }: { colors: ThemeColors }) {
+/**
+ * 40 px rounded square of the theme: its surface with two short lines of its text colours, like a
+ * tiny list. Automatic is split diagonally, light over dark.
+ */
+function Swatch({ colors, night }: { colors: ThemeColors; night?: ThemeColors }) {
+  const lines = (c: ThemeColors) => (
+    <span className="flex flex-col gap-1">
+      <span className="h-1 w-5 rounded-full" style={{ background: cssColor(c.ink) }} />
+      <span className="h-1 w-3 rounded-full" style={{ background: cssColor(c.muted) }} />
+    </span>
+  );
   return (
-    <span aria-hidden className="flex size-7 shrink-0 items-center justify-center rounded-full border border-track" style={{ background: cssColor(colors.surface) }}>
-      <span className="size-2.5 rounded-full" style={{ background: cssColor(colors.ink) }} />
+    <span aria-hidden className="relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-track" style={{ background: cssColor(colors.surface) }}>
+      {night && <span className="absolute inset-0" style={{ background: cssColor(night.surface), clipPath: "polygon(100% 0, 100% 100%, 0 100%)" }} />}
+      <span className="relative">{lines(colors)}</span>
     </span>
   );
 }
 
-/** The widget drawn small on a wallpaper colour, in the active theme's tokens. */
+/** The widget drawn small on `fill`, in the active theme's tokens. */
 function ThemePreview() {
   return (
-    <div aria-hidden className="flex h-44 items-center justify-center rounded-3xl bg-[linear-gradient(160deg,#7b8aa3,#3c4a5e)] p-6">
+    <div aria-hidden className="mb-2 flex h-44 items-center justify-center rounded-[28px] bg-fill p-6">
       <div className="flex w-60 flex-col gap-2.5 bg-surface p-4" style={{ borderRadius: "var(--radius-dialog)" }}>
         <div className="flex items-baseline gap-3">
           <span className="text-[1.375rem] font-light leading-none text-ink">Study</span>
@@ -249,17 +262,16 @@ function ArchivedSection() {
   const nextOrder = () => Math.max(-1, ...all.filter((c) => !c.archived).map((c) => c.sort_order)) + 1;
 
   return (
-    <Section title="Commitments">
-      <p className="text-caption text-muted">Archived</p>
-      {archived.length === 0 ? <EmptyText>Nothing archived.</EmptyText> : (
+    <Section title="Archived commitments">
+      {archived.length === 0 ? <p className="py-2 text-body-l text-text-strong">Nothing archived.</p> : (
         <ul className="flex flex-col">
           {archived.map((c) => (
-            <li key={c.id} className="flex min-h-14 items-center gap-3">
+            <li key={c.id} className="flex min-h-16 items-center gap-3">
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-body">{c.name}</span>
-                <span className="block text-meta text-muted">{c.type === "workout" ? "Workouts" : "Todos"}</span>
+                <span className="block truncate text-body-l">{c.name}</span>
+                <span className="block text-body text-muted">{c.type === "workout" ? "Workouts" : c.type === "collection" ? "Collection" : "Todos"}</span>
               </span>
-              <Button variant="text" disabled={!online} title={online ? undefined : OFFLINE_REASON}
+              <Button variant="text" className="-mr-3" disabled={!online} title={online ? undefined : OFFLINE_REASON}
                 onClick={() => restoreCommitment(qc, c.id, nextOrder()).catch(() => toast({ message: "Couldn't save. Check your connection." }))}>
                 Restore
               </Button>

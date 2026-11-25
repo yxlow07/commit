@@ -8,7 +8,8 @@ import { useTable } from "@/lib/data/store";
 import {
   createExercise, deleteExercise, deleteRoutine, reorderExercises, restoreRow, updateExercise, updateRoutine, type ExerciseInput,
 } from "@/lib/data/mutations";
-import { formatWeight } from "@/lib/domain/format";
+import { sessionSummaries } from "@/lib/data/history";
+import { durationMinutes, formatVolume, formatWeight } from "@/lib/domain/format";
 import { restLabel } from "@/lib/domain/labels";
 import type { Exercise, Routine } from "@/lib/domain/types";
 import { usePageTitle } from "@/components/AppShell";
@@ -16,7 +17,7 @@ import { OFFLINE_REASON, useOnline } from "@/components/Online";
 import { SortableList } from "@/components/Sortable";
 import { useToast } from "@/components/Toast";
 import {
-  Button, Dialog, EmptyText, Field, FieldGroup, IconTile, Icons, Loading, SectionHeading, Segmented, Stepper, TextField, WeekdayToggles,
+  BackLink, Button, Dialog, EmptyText, Field, FieldGroup, IconTile, Icons, Loading, SectionHeading, Segmented, Stepper, TextField, WeekdayToggles,
 } from "@/components/ui";
 
 /** Routine editor (web spec, "Routine editor"): name, planned days, rest, ordered exercises. */
@@ -24,16 +25,14 @@ export default function RoutinePage() {
   const id = useSearchParams().get("id");
   const routinesQ = useTable("routines");
   const exercisesQ = useTable("exercises");
-  const commitmentsQ = useTable("commitments");
   const routine = routinesQ.data?.find((r) => r.id === id);
   usePageTitle(routine?.name ?? "");
 
   if (routinesQ.isPending || exercisesQ.isPending) return <Loading />;
-  if (!routine) return <EmptyText>This routine doesn&apos;t exist any more. <Link href="/" className="font-bold hover:underline">Back to Today</Link></EmptyText>;
+  if (!routine) return <EmptyText>This routine doesn&apos;t exist any more. <Link href="/" className="font-bold hover:underline">Back to Commitments</Link></EmptyText>;
 
-  const commitment = commitmentsQ.data?.find((c) => c.id === routine.commitment_id);
   const exercises = (exercisesQ.data ?? []).filter((e) => e.routine_id === routine.id).sort((a, b) => a.sort_order - b.sort_order);
-  return <Editor key={routine.id} routine={routine} exercises={exercises} back={{ href: `/c?id=${routine.commitment_id}`, label: commitment?.name ?? "Back" }} />;
+  return <Editor key={routine.id} routine={routine} exercises={exercises} back={{ href: "/", label: "Groups" }} />;
 }
 
 function Editor({ routine, exercises, back }: { routine: Routine; exercises: Exercise[]; back: { href: string; label: string } }) {
@@ -57,11 +56,12 @@ function Editor({ routine, exercises, back }: { routine: Routine; exercises: Exe
   }
 
   return (
-    <div className="flex flex-col gap-8">
-      <header className="flex flex-col gap-2">
-        <Link href={back.href} className="-ml-2 flex h-9 items-center gap-1 self-start rounded-lg px-2 text-label text-muted hover:bg-hover hover:text-ink">
-          {Icons.left}{back.label}
-        </Link>
+    <div className="flex flex-col gap-10">
+      <header className="flex flex-col">
+        <div className="flex items-start justify-between gap-4">
+          <BackLink href={back.href} label={back.label} />
+          <Button variant="quiet" className="-mr-3" disabled={!online} title={online ? undefined : OFFLINE_REASON} onClick={remove}>Delete routine</Button>
+        </div>
         <EditableTitle key={routine.name} value={routine.name} onSave={(name) => save({ name })} />
       </header>
 
@@ -74,8 +74,8 @@ function Editor({ routine, exercises, back }: { routine: Routine; exercises: Exe
           format={restLabel} onChange={(v) => save({ rest_between_exercises_s: v })} />
       </div>
 
-      <section className="flex flex-col gap-1">
-        <SectionHeading className="px-2">Exercises</SectionHeading>
+      <section className="flex flex-col">
+        <SectionHeading className="pb-1">Exercises</SectionHeading>
         <SortableList
           items={exercises}
           getId={(e) => e.id}
@@ -83,13 +83,13 @@ function Editor({ routine, exercises, back }: { routine: Routine; exercises: Exe
           onReorder={(ids) => reorderExercises(qc, exercises, ids).catch(() => toast({ message: "Couldn't save the order. Check your connection." }))}
           className="flex flex-col"
           renderItem={(e, handle) => (
-            <div className="-ml-6 flex items-center">
+            <div className="-ml-9 flex items-center">
               {handle}
               <button type="button" onClick={() => setDialog({ open: true, exercise: e })}
-                className="flex min-h-12 min-w-0 flex-1 cursor-default items-center gap-3 rounded-xl px-2 py-2.5 text-left hover:bg-hover">
+                className="-mr-3 flex min-h-16 min-w-0 flex-1 cursor-default items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-hover">
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-body">{e.name}</span>
-                  <span className="block truncate text-meta text-muted">{describe(e)}</span>
+                  <span className="block truncate text-body-l">{e.name}</span>
+                  <span className="block truncate text-body text-muted">{describe(e)}</span>
                 </span>
                 <span className="text-faint">{Icons.chevron}</span>
               </button>
@@ -97,14 +97,12 @@ function Editor({ routine, exercises, back }: { routine: Routine; exercises: Exe
           )}
         />
         <button type="button" disabled={!online} title={online ? undefined : OFFLINE_REASON} onClick={() => setDialog({ open: true, exercise: null })}
-          className="flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-xl px-2 text-left text-body text-muted hover:bg-hover disabled:cursor-not-allowed">
+          className="-mx-3 flex min-h-14 w-[calc(100%+1.5rem)] cursor-pointer items-center gap-3 rounded-xl px-3 text-left text-body-l text-muted hover:bg-hover hover:text-ink disabled:cursor-not-allowed">
           {Icons.plus} Add exercise
         </button>
       </section>
 
-      <div>
-        <IconTile label={`Delete ${routine.name}`} disabled={!online} onClick={remove}>{Icons.trash}</IconTile>
-      </div>
+      <RoutineHistory routineId={routine.id} />
 
       <ExerciseDialog
         open={dialog.open}
@@ -137,8 +135,41 @@ function EditableTitle({ value, onSave }: { value: string; onSave: (v: string) =
         if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
         if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setText(value); requestAnimationFrame(() => (e.target as HTMLInputElement).blur()); }
       }}
-      className="-mx-2 w-[calc(100%+1rem)] cursor-text rounded-xl bg-transparent px-2 text-title-screen outline-none hover:bg-hover focus:bg-fill"
+      className="-mx-3 w-[calc(100%+1.5rem)] cursor-text rounded-xl bg-transparent px-3 py-1 text-title-screen outline-none hover:bg-hover focus:bg-fill"
     />
+  );
+}
+
+const historyDate = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short" });
+const historyTime = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
+
+/** This routine's finished sessions, newest first, as in the app's routine screen. */
+function RoutineHistory({ routineId }: { routineId: string }) {
+  const sessionsQ = useTable("workout_sessions");
+  const setsQ = useTable("workout_sets");
+  const routinesQ = useTable("routines");
+  const mine = sessionSummaries((sessionsQ.data ?? []).filter((x) => x.routine_id === routineId), setsQ.data ?? [], routinesQ.data ?? []);
+  return (
+    <section className="flex flex-col">
+      <SectionHeading className="pb-1">History</SectionHeading>
+      {mine.length === 0 ? <p className="py-2 text-body-l text-text-strong">No sessions yet. Finished workouts of this routine show here.</p> : (
+        <ul>
+          {mine.map((x) => (
+            <li key={x.session.id}>
+              <Link href={`/session?id=${x.session.id}`} className="-mx-3 flex min-h-16 items-center gap-3 rounded-xl px-3 py-2 hover:bg-hover">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-body-l tabular-nums">{historyDate.format(x.session.started_at).replace(",", "")}, {historyTime.format(x.session.started_at)}</span>
+                  <span className="block truncate text-body tabular-nums text-muted">
+                    {durationMinutes(x.session.started_at, x.session.ended_at)} min, {x.setCount === 1 ? "1 set" : `${x.setCount} sets`}, {formatVolume(x.volume)}
+                  </span>
+                </span>
+                <span className="text-faint">{Icons.chevron}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

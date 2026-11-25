@@ -137,18 +137,18 @@ export function TodoRow({ row, checked, fading, onToggle }: { row: RowData; chec
 
   return (
     <li className={`transition-opacity duration-150 ${fading ? "opacity-0" : ""}`}>
-      <div className={`flex min-h-12 items-center rounded-xl pl-2 pr-3 ${selected ? "bg-hover" : "hover:bg-hover"}`}>
+      <div className={`-mx-3 flex min-h-16 items-center rounded-xl pl-3 pr-3 ${selected ? "bg-hover" : "hover:bg-hover"}`}>
         <button
           type="button"
           data-todo-row={item.todo.id}
           aria-current={selected || undefined}
           onClick={() => panel.open(item.todo.id)}
           onKeyDown={onKey}
-          className="flex min-w-0 flex-1 cursor-default items-baseline gap-0 py-2.5 text-left"
+          className="flex min-w-0 flex-1 cursor-default items-baseline gap-0 py-3 text-left"
         >
-          <span className={`w-14 shrink-0 text-meta tabular-nums ${row.due.late ? "text-danger" : "text-muted"}`}>{row.due.text}</span>
+          <span className={`w-14 shrink-0 text-body tabular-nums ${row.due.late ? "text-danger" : "text-muted"}`}>{row.due.text}</span>
           <span className="min-w-0 flex-1">
-            <span className={`block truncate text-body ${checked ? "text-muted line-through" : "text-ink"} ${selected ? "font-bold" : ""}`}>{item.todo.title}</span>
+            <span className={`block truncate text-body-l ${checked ? "text-muted line-through" : "text-ink"} ${selected ? "font-medium" : ""}`}>{item.todo.title}</span>
             {row.second && (
               <span className={`block truncate text-meta ${row.secondDanger ? "text-danger" : "text-muted"}`} style={row.secondDanger ? undefined : row.secondStyle}>
                 {row.second}
@@ -165,8 +165,8 @@ export function TodoRow({ row, checked, fading, onToggle }: { row: RowData; chec
 /** A titled group of rows (Overdue, This week…); hidden by the caller when empty. */
 export function TodoSection({ title, danger, children }: { title: string; danger?: boolean; children: ReactNode }) {
   return (
-    <section className="flex flex-col gap-1">
-      <SectionHeading danger={danger} className="px-2">{title}</SectionHeading>
+    <section className="flex flex-col">
+      <SectionHeading danger={danger} className="pb-1">{title}</SectionHeading>
       <ul className="flex flex-col">{children}</ul>
     </section>
   );
@@ -228,7 +228,7 @@ export function InlineAdd({ commitmentId, commitments }: { commitmentId?: string
         disabled={!online}
         title={online ? "Add a todo (N)" : OFFLINE_REASON}
         onClick={() => { setOpen(true); requestAnimationFrame(() => input.current?.focus()); }}
-        className="flex min-h-12 w-full cursor-pointer items-center rounded-xl pl-2 pr-3 text-left text-body text-muted hover:bg-hover disabled:cursor-not-allowed"
+        className="-mx-3 flex min-h-14 w-[calc(100%+1.5rem)] cursor-pointer items-center rounded-xl px-3 text-left text-body-l text-muted hover:bg-hover hover:text-ink disabled:cursor-not-allowed"
       >
         <span className="flex w-14 shrink-0 items-center">{Icons.plus}</span>
         Add a todo
@@ -236,7 +236,7 @@ export function InlineAdd({ commitmentId, commitments }: { commitmentId?: string
     );
   }
   return (
-    <div data-inline-add className="flex min-h-12 items-center gap-2 rounded-xl pl-2 pr-1">
+    <div data-inline-add className="flex min-h-14 items-center gap-2">
       <span aria-hidden className="flex w-12 shrink-0 items-center text-muted">{Icons.plus}</span>
       <input
         ref={input}
@@ -255,13 +255,13 @@ export function InlineAdd({ commitmentId, commitments }: { commitmentId?: string
       {commitments && commitments.length > 1 && (
         <select aria-label="Commitment" value={target} onChange={(e) => setPicked(e.target.value)}
           onMouseDown={(e) => e.stopPropagation()}
-          className="h-11 max-w-36 shrink-0 cursor-pointer truncate rounded-xl bg-transparent px-2 text-meta text-muted hover:bg-hover">
+          className="h-11 max-w-36 shrink-0 cursor-pointer truncate rounded-xl bg-transparent px-2 text-body text-muted hover:bg-hover">
           {commitments.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       )}
       {text.trim() && (
         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => add(true)} title="Save and add details (Shift+Enter)"
-          className="h-9 shrink-0 cursor-pointer rounded-lg px-2.5 text-label font-bold text-ink hover:bg-hover">More</button>
+          className="h-11 shrink-0 cursor-pointer rounded-xl px-3 text-body font-bold text-ink hover:bg-hover">More</button>
       )}
     </div>
   );

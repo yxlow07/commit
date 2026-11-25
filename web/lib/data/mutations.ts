@@ -51,7 +51,8 @@ async function reorderTo<T extends "commitments" | "routines" | "exercises">(
 
 export const createCommitment = (qc: QueryClient, name: string, type: CommitmentType, color: number, sortOrder: number) =>
   insertRow(qc, "commitments", {
-    id: crypto.randomUUID(), name: name.trim(), type, color, sort_order: sortOrder, show_in_widget: 1, archived: 0,
+    // Collections are standalone trackers: never a widget tab.
+    id: crypto.randomUUID(), name: name.trim(), type, color, sort_order: sortOrder, show_in_widget: type === "collection" ? 0 : 1, archived: 0,
   });
 
 export const updateCommitment = (qc: QueryClient, id: string, changes: Partial<Commitment>) =>
@@ -148,6 +149,18 @@ export const reorderExercises = (qc: QueryClient, items: Exercise[], ids: string
 export const editSet = (qc: QueryClient, id: string, reps: number, weight: number) =>
   updateRow(qc, "workout_sets", id, { reps: Math.max(0, reps), weight: Math.max(0, weight) });
 export const deleteSet = (qc: QueryClient, id: string) => softDelete(qc, "workout_sets", id);
+
+/** Deletes a logged session and its sets (soft deletes, so the phone drops them on its next sync). */
+export async function deleteSession(qc: QueryClient, sessionId: string, setIds: string[]) {
+  await Promise.all(setIds.map((id) => softDelete(qc, "workout_sets", id)));
+  await softDelete(qc, "workout_sessions", sessionId);
+}
+
+/** Undo of [deleteSession]. */
+export async function restoreSession(qc: QueryClient, sessionId: string, setIds: string[]) {
+  await restoreRow(qc, "workout_sessions", sessionId);
+  await Promise.all(setIds.map((id) => restoreRow(qc, "workout_sets", id)));
+}
 
 // ---- Settings (F6) ----
 

@@ -129,7 +129,7 @@ fun LazyListScope.workoutInProgress(w: WorkoutSections, onOpenLive: () -> Unit) 
             val ex = l.exercise
             val detail = when {
                 l.state.phase == WorkoutPhase.COMPLETE -> "Workout done"
-                ex != null -> "${ex.name}, set ${l.state.setNo} of ${ex.sets}"
+                ex != null -> "${ex.name}, ${dev.yxuan.commit.ui.format.WorkoutFormat.setOf(l.state.setNo, ex.sets).lowercase()}"
                 else -> ""
             }
             NavRow(title = l.routine.name, detail = detail, onClick = onOpenLive, titleStyle = Commit.type.titleDialog.copy(fontWeight = FontWeight.Medium), minHeight = 64.dp)

@@ -135,8 +135,12 @@ private fun Live(live: LiveWorkout) {
             Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 // The session's sets in History: more than the summary above, not the same screen bigger.
                 TextButton("See sets", actionStartActivity<MainActivity>(actionParametersOf(OpenSessionParam to s.sessionId)))
-                Spacer(GlanceModifier.height(16.dp))
-                WidgetButton("Done", actionRunCallback<EndWorkoutAction>(), primary = false)
+                Spacer(GlanceModifier.defaultWeight())
+                if (live.canExtraSet) {
+                    WidgetButton("One more set", actionRunCallback<ExtraSetAction>(), primary = false)
+                    Spacer(GlanceModifier.width(8.dp))
+                }
+                WidgetButton("Done", actionRunCallback<EndWorkoutAction>(), primary = true)
             }
             return@Column
         }
@@ -147,7 +151,10 @@ private fun Live(live: LiveWorkout) {
         val setTimer = s.phase == WorkoutPhase.READY && !live.isTimed
         val heroTimer = setTimer && LocalSize.current.height >= HERO_TIMER_HEIGHT
         Column(GlanceModifier.fillMaxWidth()) {
-            Text(ex.name, maxLines = 1, style = TextStyle(color = c.ink, fontSize = 17.sp, fontWeight = FontWeight.Bold))
+            Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(ex.name, maxLines = 1, style = TextStyle(color = c.ink, fontSize = 17.sp, fontWeight = FontWeight.Bold), modifier = GlanceModifier.defaultWeight())
+                if (canEndExercise(live)) SmallTextButton("End exercise", actionRunCallback<EndExerciseAction>())
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(WorkoutFormat.position(live) + if (setTimer && !heroTimer) ", " else "", maxLines = 1, style = TextStyle(color = c.muted, fontSize = 13.sp, fontWeight = FontWeight.Medium))
                 if (setTimer && !heroTimer) Elapsed(s.phaseStartedAt)
@@ -166,7 +173,7 @@ private fun Live(live: LiveWorkout) {
             WorkoutPhase.READY -> if (live.isTimed) {
                 Text("${ex.durationSeconds} s", style = TextStyle(color = c.ink, fontSize = 48.sp, fontFamily = WidgetLight, textAlign = TextAlign.Center), modifier = GlanceModifier.fillMaxWidth())
                 Spacer(GlanceModifier.height(16.dp))
-                WidgetButton("Start set", actionRunCallback<DoneSetAction>(), primary = true, modifier = GlanceModifier.fillMaxWidth())
+                SetButtons("Start set", 48.dp)
             } else {
                 Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Stepper("${s.reps}", "reps", StepRepsAction::class.java, "Fewer reps", "More reps", GlanceModifier.defaultWeight())
@@ -174,7 +181,7 @@ private fun Live(live: LiveWorkout) {
                     Stepper(WorkoutFormat.weightValue(s.weight), "kg", StepWeightAction::class.java, "Less weight", "More weight", GlanceModifier.defaultWeight())
                 }
                 Spacer(GlanceModifier.height(16.dp))
-                WidgetButton("Done set", actionRunCallback<DoneSetAction>(), primary = true, modifier = GlanceModifier.fillMaxWidth())
+                SetButtons("Done set", 48.dp)
             }
             WorkoutPhase.REST, WorkoutPhase.WORK -> {
                 // The rest-over alarm redraws the widget, so it flips to overtime at 0.
@@ -188,7 +195,12 @@ private fun Live(live: LiveWorkout) {
                 Text(under, maxLines = 1, style = TextStyle(color = if (over) c.danger else c.muted, fontSize = 14.sp, textAlign = TextAlign.Center), modifier = GlanceModifier.fillMaxWidth())
                 Spacer(GlanceModifier.height(16.dp))
                 Row(GlanceModifier.fillMaxWidth()) {
-                    if (over) {
+                    if (live.canExtraSet) {
+                        // The exercise's planned sets are done: another one, or on to the next exercise.
+                        WidgetButton("One more set", actionRunCallback<ExtraSetAction>(), primary = false, modifier = GlanceModifier.defaultWeight())
+                        Spacer(GlanceModifier.width(8.dp))
+                        WidgetButton(if (over) live.nextLabel else "Skip rest", actionRunCallback<SkipAction>(), primary = true, modifier = GlanceModifier.defaultWeight())
+                    } else if (over) {
                         WidgetButton(live.nextLabel, actionRunCallback<SkipAction>(), primary = true, modifier = GlanceModifier.defaultWeight())
                     } else if (s.phase == WorkoutPhase.REST) {
                         WidgetButton("Add 30 s", actionRunCallback<AddRestAction>(), primary = false, modifier = GlanceModifier.defaultWeight())
@@ -223,7 +235,11 @@ private fun CompactLive(live: LiveWorkout) {
     Column(GlanceModifier.fillMaxSize().padding(end = 10.dp)) {
         Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
             Text(title, maxLines = 1, style = TextStyle(color = c.ink, fontSize = 16.sp, fontWeight = FontWeight.Bold), modifier = GlanceModifier.defaultWeight())
-            Text("Set ${s.setNo} of ${ex.sets}", maxLines = 1, style = TextStyle(color = c.muted, fontSize = 13.sp))
+            if (canEndExercise(live)) {
+                SmallTextButton("End", actionRunCallback<EndExerciseAction>(), description = "End exercise")
+                Text("  ", style = TextStyle(fontSize = 13.sp))
+            }
+            Text(dev.yxuan.commit.ui.format.WorkoutFormat.setOf(s.setNo, ex.sets), maxLines = 1, style = TextStyle(color = c.muted, fontSize = 13.sp))
             if (s.phase == WorkoutPhase.READY && !live.isTimed) {
                 Text(", ", style = TextStyle(color = c.muted, fontSize = 13.sp))
                 Elapsed(s.phaseStartedAt)
@@ -242,14 +258,18 @@ private fun CompactLive(live: LiveWorkout) {
                     }
                 }
                 Spacer(GlanceModifier.defaultWeight())
-                WidgetButton(if (live.isTimed) "Start set" else "Done set", actionRunCallback<DoneSetAction>(), primary = true, modifier = GlanceModifier.fillMaxWidth(), height = 44.dp)
+                SetButtons(if (live.isTimed) "Start set" else "Done set", 44.dp)
             }
             WorkoutPhase.REST, WorkoutPhase.WORK -> {
                 val over = live.restOver(System.currentTimeMillis())
                 s.phaseEndsAt?.let { Countdown(it, small = true, over = over) }
                 Spacer(GlanceModifier.defaultWeight())
                 Row(GlanceModifier.fillMaxWidth()) {
-                    if (over) {
+                    if (live.canExtraSet) {
+                        WidgetButton("One more set", actionRunCallback<ExtraSetAction>(), primary = false, modifier = GlanceModifier.defaultWeight(), height = 44.dp)
+                        Spacer(GlanceModifier.width(8.dp))
+                        WidgetButton(if (over) live.nextLabel else "Skip rest", actionRunCallback<SkipAction>(), primary = true, modifier = GlanceModifier.defaultWeight(), height = 44.dp)
+                    } else if (over) {
                         WidgetButton(live.nextLabel, actionRunCallback<SkipAction>(), primary = true, modifier = GlanceModifier.defaultWeight(), height = 44.dp)
                     } else if (resting) {
                         WidgetButton("Add 30 s", actionRunCallback<AddRestAction>(), primary = false, modifier = GlanceModifier.defaultWeight(), height = 44.dp)
@@ -289,7 +309,7 @@ private fun SetProgress(setNo: Int, total: Int) {
             }
         }
         Spacer(GlanceModifier.width(10.dp))
-        Text("Set $setNo of $total", style = TextStyle(color = c.muted, fontSize = 13.sp))
+        Text(WorkoutFormat.setOf(setNo, total), style = TextStyle(color = c.muted, fontSize = 13.sp))
     }
 }
 
@@ -364,6 +384,32 @@ internal fun WidgetButton(text: String, action: Action, primary: Boolean, modifi
     ) {
         Text(text, maxLines = 1, style = TextStyle(color = if (primary) c.onInk else c.ink, fontSize = 15.sp, fontWeight = FontWeight.Medium))
     }
+}
+
+/** Between sets, or resting with sets of this exercise still to come: "End exercise" moves on. */
+private fun canEndExercise(live: LiveWorkout): Boolean =
+    live.state.phase == WorkoutPhase.READY || (live.state.phase == WorkoutPhase.REST && !live.canExtraSet)
+
+/** "Skip set" (light) beside the main "Done set" / "Start set" (dark). */
+@Composable
+private fun SetButtons(primaryText: String, height: androidx.compose.ui.unit.Dp) {
+    Row(GlanceModifier.fillMaxWidth()) {
+        WidgetButton("Skip set", actionRunCallback<SkipSetAction>(), primary = false, height = height)
+        Spacer(GlanceModifier.width(8.dp))
+        WidgetButton(primaryText, actionRunCallback<DoneSetAction>(), primary = true, modifier = GlanceModifier.defaultWeight(), height = height)
+    }
+}
+
+/** Small `muted` Bold text action with a 44 dp tall hit area, for header rows. */
+@Composable
+private fun SmallTextButton(text: String, action: Action, description: String = text) {
+    val c = LocalWidgetColors.current
+    Text(
+        text,
+        maxLines = 1,
+        style = TextStyle(color = c.muted, fontSize = 13.sp, fontWeight = FontWeight.Bold),
+        modifier = GlanceModifier.padding(vertical = 12.dp).clickable(action).semantics { contentDescription = description },
+    )
 }
 
 /** Text button: no background, `ink` Bold. */

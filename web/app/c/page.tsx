@@ -14,11 +14,11 @@ import type { Commitment } from "@/lib/domain/types";
 import { usePageTitle } from "@/components/AppShell";
 import { CommitmentDialog } from "@/components/CommitmentDialog";
 import { OFFLINE_REASON, useOnline } from "@/components/Online";
-import { useCommitments } from "@/components/Sidebar";
+import { useCommitments } from "@/components/Nav";
 import { SortableList } from "@/components/Sortable";
 import { useToast } from "@/components/Toast";
 import { InlineAdd, TodoRow, TodoSection, tint, useTicks, useUntickDone, type RowData } from "@/components/Todos";
-import { Button, EmptyText, IconButton, Icons, Loading, PageTitle, TextTabs, fieldClass, usePhone, useNow } from "@/components/ui";
+import { BackLink, Button, EmptyText, IconButton, Icons, Loading, PageTitle, TextTabs, fieldClass, useNow } from "@/components/ui";
 
 /** Commitment page (web spec, "Commitment (todo)" and "Commitment (workout)"). */
 export default function CommitmentPage() {
@@ -28,19 +28,18 @@ export default function CommitmentPage() {
   const commitments = useCommitments();
   const commitment = commitmentsQ.data?.find((c) => c.id === id);
   const [editing, setEditing] = useState(false);
-  const phone = usePhone();
   usePageTitle(commitment?.name ?? "");
 
   if (commitmentsQ.isPending) return <Loading />;
   if (!commitment) {
-    return <EmptyText>This commitment doesn&apos;t exist any more. <Link href="/" className="font-bold underline-offset-2 hover:underline">Back to Today</Link></EmptyText>;
+    return <EmptyText>This commitment doesn&apos;t exist any more. <Link href="/" className="font-bold underline-offset-2 hover:underline">Back to Commitments</Link></EmptyText>;
   }
 
   const title = (summary: string) => (
     <PageTitle
       title={commitment.name}
       summary={summary}
-      before={phone ? <Link href="/" className="-ml-2 mb-2 flex size-11 items-center justify-center rounded-xl text-ink hover:bg-hover" aria-label="Back to Today">{Icons.back}</Link> : undefined}
+      before={<BackLink href="/" label="Groups" />}
     >
       <IconButton label={`Edit ${commitment.name}`} onClick={() => setEditing(true)}>{Icons.pencil}</IconButton>
     </PageTitle>
@@ -72,13 +71,13 @@ function TodoCommitment({ commitment, title }: { commitment: Commitment; title: 
   const mine = (todosQ.data ?? []).filter((t) => t.commitment_id === commitment.id);
   const open = openItems(mine, now);
   const late = open.filter((i) => isLate(i.dueAt, i.hasTime, now)).length;
-  const summary = open.length === 0 ? "Nothing open" : `${open.length} open${late ? `, ${late} overdue` : ""}`;
+  const summary = open.length === 0 ? "Nothing open." : `${open.length} open${late ? `, ${late} overdue` : ""}.`;
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         {title(summary)}
-        <TextTabs label="Show" value={tab} onChange={setTab} items={[{ id: "open", label: "Open" }, { id: "done", label: "Done" }]} />
+        <TextTabs size="body" label="Show" value={tab} onChange={setTab} items={[{ id: "open", label: "Open" }, { id: "done", label: "Done" }]} />
       </div>
       {todosQ.isPending ? <Loading /> : tab === "open"
         ? <OpenList commitment={commitment} open={open} now={now} />
@@ -117,8 +116,8 @@ function OpenList({ commitment, open, now }: { commitment: Commitment; open: Tod
   });
 
   return (
-    <div className="flex flex-col gap-6">
-      {items.length === 0 && <EmptyText className="px-2">All done for {commitment.name}.</EmptyText>}
+    <div className="flex flex-col gap-7">
+      {items.length === 0 && <EmptyText>All done for {commitment.name}.</EmptyText>}
       {late.length > 0 && <TodoSection title="Overdue" danger>{render(late)}</TodoSection>}
       {week.length > 0 && <TodoSection title="This week">{render(week)}</TodoSection>}
       {later.length > 0 && <TodoSection title="Later">{render(later)}</TodoSection>}
@@ -150,9 +149,9 @@ function DoneList({ items, now }: { items: TodoItem[]; now: number }) {
     return [label[0].toUpperCase() + label.slice(1), next ? `next ${next === "Today" ? "today" : next}` : ""].filter(Boolean).join(", ");
   };
 
-  if (rows.length === 0) return <EmptyText className="px-2">Nothing done yet.</EmptyText>;
+  if (rows.length === 0) return <EmptyText>Nothing done yet.</EmptyText>;
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-7">
       {[...groups].map(([title, list]) => (
         <TodoSection key={title} title={title}>
           {list.map(({ i, at }) => {
@@ -190,7 +189,7 @@ function WorkoutCommitment({ commitment, title }: { commitment: Commitment; titl
       {title(summary)}
       {routinesQ.isPending ? <Loading /> : (
         <div className="flex flex-col">
-          {routines.length === 0 && <EmptyText className="mb-4 px-2">No routines yet. Add each workout day, like Push, Pull and Legs.</EmptyText>}
+          {routines.length === 0 && <EmptyText className="mb-4">No routines yet. Add each workout day, like Push, Pull and Legs.</EmptyText>}
           <SortableList
             items={routines}
             getId={(r) => r.id}
@@ -201,12 +200,12 @@ function WorkoutCommitment({ commitment, title }: { commitment: Commitment; titl
               const n = count(r.id);
               const days = weekdaysLabel(r.planned_days);
               return (
-                <div className="-ml-6 flex items-center rounded-xl">
+                <div className="-ml-9 flex items-center">
                   {handle}
-                  <Link href={`/routine?id=${r.id}`} className="flex min-h-12 min-w-0 flex-1 items-center gap-3 rounded-xl px-2 py-2.5 hover:bg-hover">
+                  <Link href={`/routine?id=${r.id}`} className="-mr-3 flex min-h-[72px] min-w-0 flex-1 items-center gap-4 rounded-xl px-3 py-2 hover:bg-hover">
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-body">{r.name}</span>
-                      <span className="block truncate text-meta" style={tint(commitment.color)}>
+                      <span className="block truncate text-row">{r.name}</span>
+                      <span className="block truncate text-body" style={tint(commitment.color)}>
                         {[n === 1 ? "1 exercise" : `${n} exercises`, days].filter(Boolean).join(", ")}
                       </span>
                     </span>
@@ -245,13 +244,13 @@ function NewRoutine({ commitment, nextOrder }: { commitment: Commitment; nextOrd
   if (!open) {
     return (
       <button type="button" disabled={!online} title={online ? undefined : OFFLINE_REASON} onClick={() => setOpen(true)}
-        className="flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-xl px-2 text-left text-body text-muted hover:bg-hover disabled:cursor-not-allowed">
+        className="-mx-3 flex min-h-14 w-[calc(100%+1.5rem)] cursor-pointer items-center gap-3 rounded-xl px-3 text-left text-body-l text-muted hover:bg-hover hover:text-ink disabled:cursor-not-allowed">
         {Icons.plus} New routine
       </button>
     );
   }
   return (
-    <div className="flex min-h-12 items-center gap-3 px-2">
+    <div className="flex min-h-14 items-center gap-3">
       <span aria-hidden className="text-muted">{Icons.plus}</span>
       <input autoFocus aria-label="Routine name" placeholder="Pull Day" value={name} onChange={(e) => setName(e.target.value)}
         onBlur={() => { if (!name.trim()) setOpen(false); }}

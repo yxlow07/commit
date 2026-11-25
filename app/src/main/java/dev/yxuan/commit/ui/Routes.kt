@@ -16,24 +16,27 @@ data class RoutineEditorRoute(val id: String)
 object LiveWorkoutRoute
 
 @Serializable
-object SettingsRoute
-
-@Serializable
 object ThemeRoute
 
 @Serializable
 object ArchivedRoute
 
 @Serializable
-object HistoryRoute
-
-@Serializable
 data class SessionDetailRoute(val id: String)
 
-/** Recap screen; [kind] is a `RecapKind` name. */
+/**
+ * Recap screen; [kind] is a `RecapKind` name. With [epochDay] (from the History grid) it reviews that
+ * day instead: what got done, the workouts, what was due and is still open.
+ */
 @Serializable
-data class RecapRoute(val kind: String)
+data class RecapRoute(val kind: String, val epochDay: Long = NO_DAY) {
+    companion object { const val NO_DAY = Long.MIN_VALUE }
+}
 
 /** Edit an existing todo ([todoId] set) or create one in [commitmentId]. */
 @Serializable
 data class TodoEditorRoute(val todoId: String? = null, val commitmentId: String? = null)
+
+/** A collection (commitment of type COLLECTION): its groups and items. */
+@Serializable
+data class CollectionRoute(val id: String)

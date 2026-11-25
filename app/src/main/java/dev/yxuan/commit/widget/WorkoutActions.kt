@@ -46,6 +46,27 @@ class AddRestAction : ActionCallback {
     }
 }
 
+/** "Skip set": pass over the waiting set without logging it. */
+class SkipSetAction : ActionCallback {
+    override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
+        context.appContainer.workoutRepository.skipSet()
+    }
+}
+
+/** "End exercise": skip this exercise's remaining sets and go to the next exercise. */
+class EndExerciseAction : ActionCallback {
+    override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
+        context.appContainer.workoutRepository.endExercise()
+    }
+}
+
+/** "One more set": another set of the exercise just finished. */
+class ExtraSetAction : ActionCallback {
+    override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
+        context.appContainer.workoutRepository.extraSet()
+    }
+}
+
 class SkipAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         context.appContainer.workoutRepository.skip()

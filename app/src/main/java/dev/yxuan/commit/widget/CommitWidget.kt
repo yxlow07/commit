@@ -67,6 +67,9 @@ import java.time.Clock
 /** Per-widget-instance state: the selected commitment (phone-only, not synced). */
 val SelectedCommitmentKey = stringPreferencesKey("selected_commitment_id")
 
+/** The Agenda tab's id in [SelectedCommitmentKey]: every commitment's todos, soonest first. */
+const val AGENDA_TAB_ID = "agenda"
+
 /** Per-widget-instance state: todos ticked on this tab, kept visible (checked) until the tab changes. */
 val RecentlyDoneKey = stringSetPreferencesKey("recently_done")
 
@@ -121,8 +124,8 @@ class CommitWidget : GlanceAppWidget() {
             val recentlyDone = prefs[RecentlyDoneKey].orEmpty().mapNotNull { e ->
                 e.split('|').takeIf { it.size == 2 }?.let { (tid, row) -> tid to (row.toIntOrNull() ?: 0) }
             }.toMap()
-            // Fall back to the first tab if the stored one was archived, deleted or hidden.
-            val selected = tabs.firstOrNull { it.id == selectedId } ?: tabs.firstOrNull()
+            // Agenda (null) is the default, and the fallback if the stored tab was archived, deleted or hidden.
+            val selected = tabs.firstOrNull { it.id == selectedId }
             val colors = remember(theme) { WidgetColors.of(theme) }
 
             CompositionLocalProvider(LocalWidgetColors provides colors) {
@@ -130,12 +133,18 @@ class CommitWidget : GlanceAppWidget() {
                     .let { if (theme.usesSystemRadius()) it.cornerRadius(android.R.dimen.system_app_widget_background_radius) else it.cornerRadius(theme.spec.cornerRadius.dp) }
                     .padding(start = 20.dp, end = 6.dp, top = 16.dp, bottom = 14.dp)
                 Column(panel) {
-                    if (selected == null) {
+                    if (tabs.isEmpty()) {
                         NoCommitments()
                         return@Column
                     }
                     TabRow(tabs, selected)
-                    if (selected.type == CommitmentType.WORKOUT) {
+                    if (selected == null) {
+                        // Same list as the app's Agenda page: open todos from every non-workout
+                        // commitment, soonest first, each with its commitment's name underneath.
+                        val byId = tabs.filter { it.type == CommitmentType.STANDARD }.associateBy { it.id }
+                        val mine = todos.filter { it.commitmentId in byId }.map { TodoItem.of(it, clock) }
+                        TodoArea(null, withTickedRows(mine, recentlyDone), clock, byId)
+                    } else if (selected.type == CommitmentType.WORKOUT) {
                         Spacer(GlanceModifier.height(10.dp))
                         WorkoutPanel(routines.filter { it.routine.commitmentId == selected.id }, live)
                     } else {
@@ -227,24 +236,31 @@ internal fun tabWindow(widths: List<Float>, selected: Int, available: Float, gap
  * to 24 sp.
  */
 @Composable
-private fun TabRow(tabs: List<CommitmentEntity>, selected: CommitmentEntity) {
+private fun TabRow(commitments: List<CommitmentEntity>, selected: CommitmentEntity?) {
     val c = LocalWidgetColors.current
     val available = (LocalSize.current.width - 36.dp).value
-    val selectedIndex = tabs.indexOf(selected).coerceAtLeast(0)
-    val bigSize = if (textWidth(selected.name, 30.sp).value > available * 0.6f) 24.sp else 30.sp
-    val widths = tabs.mapIndexed { i, t -> textWidth(t.name, if (i == selectedIndex) bigSize else 15.sp).value }
-    val slots = tabWindow(widths, selectedIndex, available, gap = 14f)
+    // Agenda is pinned first and never scrolls away; only the commitments after it scroll (a null
+    // [selected] means Agenda). Index 0 of [tabs] is Agenda, commitment i is index i + 1.
+    val tabs = listOf(AGENDA_TAB_ID to "Agenda") + commitments.map { it.id to it.name }
+    val agendaOn = selected == null
+    val selectedIndex = if (agendaOn) 0 else commitments.indexOf(selected).coerceAtLeast(0) + 1
+    val bigSize = if (textWidth(tabs[selectedIndex].second, 30.sp).value > available * 0.6f) 24.sp else 30.sp
+    val agendaWidth = textWidth("Agenda", if (agendaOn) bigSize else 15.sp).value
+    val widths = commitments.mapIndexed { i, t -> textWidth(t.name, if (i + 1 == selectedIndex) bigSize else 15.sp).value }
+    // With Agenda selected the commitments sit scrolled to the start.
+    val window = tabWindow(widths, if (agendaOn) 0 else selectedIndex - 1, available - agendaWidth - 14f, gap = 14f)
+    val slots = listOf(TabSlot(0)) + window.take(MAX_ROW_CHILDREN - 1).map { it.copy(index = it.index + 1) }
 
     // 12 dp above and below for a 44 dp hit area; a short widget showing a workout needs the room.
-    val tabPad = if (selected.type == CommitmentType.WORKOUT && LocalSize.current.height < COMPACT_WORKOUT_HEIGHT) 4.dp else 12.dp
+    val tabPad = if (selected?.type == CommitmentType.WORKOUT && LocalSize.current.height < COMPACT_WORKOUT_HEIGHT) 4.dp else 12.dp
     // A Glance Row holds at most 10 children and silently drops the rest, so the 14 dp gap is each
     // tab's start padding rather than a Spacer between tabs (6 tabs + 5 spacers lost the 6th tab).
     Row(GlanceModifier.fillMaxWidth().padding(end = 10.dp), verticalAlignment = Alignment.Bottom) {
-        slots.take(MAX_ROW_CHILDREN).forEachIndexed { n, slot ->
+        slots.forEachIndexed { n, slot ->
             val gap = if (n > 0) 14.dp else 0.dp
-            val tab = tabs[slot.index]
+            val (tabId, tabName) = tabs[slot.index]
             val on = slot.index == selectedIndex
-            val tap = actionRunCallback<SelectTabAction>(actionParametersOf(CommitmentIdParam to tab.id))
+            val tap = actionRunCallback<SelectTabAction>(actionParametersOf(CommitmentIdParam to tabId))
             if (on) {
                 // Selected: a subtle short dash under the name. Its 5 dp (gap + bar) come out of
                 // the bottom padding, so the baseline still meets the small tabs'.
@@ -253,9 +269,9 @@ private fun TabRow(tabs: List<CommitmentEntity>, selected: CommitmentEntity) {
                     modifier = GlanceModifier
                         .padding(start = gap, top = 2.dp, bottom = (tabPad - 5.dp).coerceAtLeast(0.dp))
                         .clickable(tap)
-                        .semantics { contentDescription = tab.name + ", selected tab" },
+                        .semantics { contentDescription = tabName + ", selected tab" },
                 ) {
-                    Text(tab.name, maxLines = 1, style = TextStyle(color = c.ink, fontSize = bigSize, fontFamily = WidgetLight))
+                    Text(tabName, maxLines = 1, style = TextStyle(color = c.ink, fontSize = bigSize, fontFamily = WidgetLight))
                     Spacer(GlanceModifier.height(3.dp))
                     // A short dash centred under the name, a faint tint of the text: a hint, not a highlight.
                     Box(GlanceModifier.width(18.dp).height(2.dp).cornerRadius(1.dp).background(c.tabDash)) {}
@@ -263,14 +279,14 @@ private fun TabRow(tabs: List<CommitmentEntity>, selected: CommitmentEntity) {
             } else {
                 // Unselected: light grey, regular weight.
                 Text(
-                    tab.name,
+                    tabName,
                     maxLines = 1,
                     style = TextStyle(color = c.tabIdle, fontSize = 15.sp, fontWeight = FontWeight.Normal),
                     modifier = GlanceModifier
                         .let { if (slot.partial) it.width(slot.width.dp + gap) else it }
                         .padding(start = gap, top = 2.dp, bottom = tabPad + 4.dp)
                         .clickable(tap)
-                        .semantics { contentDescription = tab.name + ", tab" },
+                        .semantics { contentDescription = tabName + ", tab" },
                 )
             }
         }
@@ -279,8 +295,12 @@ private fun TabRow(tabs: List<CommitmentEntity>, selected: CommitmentEntity) {
 
 // ---- Todos ----
 
+/**
+ * The todo list and footer. [commitment] is null on the Agenda tab, where [agenda] maps each todo's
+ * commitment id to its commitment, for the name line under the title.
+ */
 @Composable
-private fun TodoArea(commitment: CommitmentEntity, items: List<TodoItem>, clock: Clock) {
+private fun TodoArea(commitment: CommitmentEntity?, items: List<TodoItem>, clock: Clock, agenda: Map<String, CommitmentEntity>? = null) {
     val c = LocalWidgetColors.current
     val size = LocalSize.current
     val small = size.height < MEDIUM.height || size.width < MEDIUM.width
@@ -295,14 +315,14 @@ private fun TodoArea(commitment: CommitmentEntity, items: List<TodoItem>, clock:
         Box(GlanceModifier.fillMaxWidth().defaultWeight()) {
             when {
                 items.isEmpty() -> Text(
-                    "All done for ${commitment.name}.",
+                    if (commitment == null) "Nothing open." else "All done for ${commitment.name}.",
                     style = TextStyle(color = c.textStrong, fontSize = 15.sp),
                     modifier = GlanceModifier.padding(start = 56.dp, top = 8.dp),
                 )
                 large && items.size > fit -> LazyColumn(GlanceModifier.fillMaxSize()) {
-                    items(items.withIndex().toList(), itemId = { it.value.todo.id.hashCode().toLong() }) { (i, item) -> TodoRow(item, i, clock) }
+                    items(items.withIndex().toList(), itemId = { it.value.todo.id.hashCode().toLong() }) { (i, item) -> TodoRow(item, i, clock, agenda?.get(item.todo.commitmentId)) }
                 }
-                else -> Column(GlanceModifier.fillMaxWidth()) { items.take(if (large) fit else maxRows).forEachIndexed { i, item -> TodoRow(item, i, clock) } }
+                else -> Column(GlanceModifier.fillMaxWidth()) { items.take(if (large) fit else maxRows).forEachIndexed { i, item -> TodoRow(item, i, clock, agenda?.get(item.todo.commitmentId)) } }
             }
         }
         Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -315,14 +335,17 @@ private fun TodoArea(commitment: CommitmentEntity, items: List<TodoItem>, clock:
                 Text(summary, style = TextStyle(color = c.muted, fontSize = 13.sp, fontWeight = FontWeight.Medium))
             }
             Spacer(GlanceModifier.defaultWeight())
-            AddButton(commitment.id)
+            AddButton(commitment?.id)
         }
     }
 }
 
-/** Due label (56 dp column), title and optional recurrence line, checkbox on the right. */
+/**
+ * Due label (56 dp column), title and optional second line, checkbox on the right. The second line
+ * is the recurrence; on the Agenda tab it is "[owner], recurrence", tinted toward the owner's colour.
+ */
 @Composable
-private fun TodoRow(item: TodoItem, row: Int, clock: Clock) {
+private fun TodoRow(item: TodoItem, row: Int, clock: Clock, owner: CommitmentEntity? = null) {
     val c = LocalWidgetColors.current
     val todo = item.todo
     val due = DueLabels.open(item.dueAt, item.hasTime, clock)
@@ -350,8 +373,9 @@ private fun TodoRow(item: TodoItem, row: Int, clock: Clock) {
                         textDecoration = if (checked) TextDecoration.LineThrough else TextDecoration.None,
                     ),
                 )
-                if (item.isRecurring && !checked) {
-                    Text(Recurrence.label(todo), maxLines = 1, style = TextStyle(color = c.muted, fontSize = 13.sp))
+                val second = listOfNotNull(owner?.name, if (item.isRecurring && !checked) Recurrence.label(todo) else null).joinToString(", ")
+                if (second.isNotEmpty()) {
+                    Text(second, maxLines = 1, style = TextStyle(color = owner?.let { c.toward(it.color) } ?: c.muted, fontSize = 13.sp))
                 }
             }
         }
@@ -379,13 +403,17 @@ private fun Checkbox(todoId: String, row: Int, title: String, checked: Boolean) 
     }
 }
 
-/** Primary round add button (44 dp) → quick-add popup over the home screen, on this tab. */
+/**
+ * Primary round add button (44 dp) → quick-add popup over the home screen, on this tab. On Agenda
+ * ([commitmentId] null) the popup preselects the first commitment and you can pick another there.
+ */
 @Composable
-private fun AddButton(commitmentId: String) {
+private fun AddButton(commitmentId: String?) {
     val c = LocalWidgetColors.current
+    val params = if (commitmentId == null) actionParametersOf() else actionParametersOf(CommitmentIdParam to commitmentId)
     Box(
         GlanceModifier.size(44.dp).cornerRadius(WIDGET_BUTTON_RADIUS).background(c.ink)
-            .clickable(actionStartActivity<QuickAddActivity>(actionParametersOf(CommitmentIdParam to commitmentId)))
+            .clickable(actionStartActivity<QuickAddActivity>(params))
             .semantics { contentDescription = "Add todo" },
         contentAlignment = Alignment.Center,
     ) {

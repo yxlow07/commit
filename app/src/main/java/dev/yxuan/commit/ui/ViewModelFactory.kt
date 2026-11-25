@@ -26,7 +26,7 @@ private val CreationExtras.container: AppContainer
 
 /** Builds every screen ViewModel from the [AppContainer]. */
 val AppViewModelFactory: ViewModelProvider.Factory = viewModelFactory {
-    initializer { TodayViewModel(container.commitmentRepository, container.todoRepository, container.routineRepository, container.clock) }
+    initializer { TodayViewModel(container.commitmentRepository, container.todoRepository, container.routineRepository, container.collectionRepository, container.clock) }
     initializer {
         CommitmentDetailViewModel(createSavedStateHandle(), container.commitmentRepository, container.todoRepository)
     }
@@ -34,7 +34,7 @@ val AppViewModelFactory: ViewModelProvider.Factory = viewModelFactory {
         TodoEditorViewModel(createSavedStateHandle(), container.commitmentRepository, container.todoRepository, container.clock)
     }
     initializer { WorkoutsViewModel(container.commitmentRepository, container.routineRepository, container.workoutRepository) }
-    initializer { RoutineEditorViewModel(createSavedStateHandle(), container.routineRepository) }
+    initializer { RoutineEditorViewModel(createSavedStateHandle(), container.routineRepository, container.historyRepository) }
     initializer { LiveWorkoutViewModel(container.workoutRepository) }
     initializer { SettingsViewModel(container.settingsRepository, container.themeRepository, container.commitmentRepository) }
     initializer { ThemeViewModel(container.themeRepository) }
@@ -42,4 +42,7 @@ val AppViewModelFactory: ViewModelProvider.Factory = viewModelFactory {
     initializer { HistoryViewModel(container.historyRepository, container.clock) }
     initializer { SessionDetailViewModel(createSavedStateHandle(), container.historyRepository) }
     initializer { RecapViewModel(createSavedStateHandle(), container.recapRepository) }
+    initializer {
+        dev.yxuan.commit.ui.collection.CollectionViewModel(createSavedStateHandle(), container.commitmentRepository, container.collectionRepository, container.collectionPhotos)
+    }
 }

@@ -16,6 +16,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.rememberCoroutineScope
+import dev.yxuan.commit.ui.workout.LiveWorkoutBar
+import dev.yxuan.commit.ui.today.AgendaScreen
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -31,12 +37,10 @@ import dev.yxuan.commit.domain.RecapKind
 import dev.yxuan.commit.domain.theme.ActiveTheme
 import dev.yxuan.commit.notify.Notifications
 import dev.yxuan.commit.ui.CommitmentRoute
-import dev.yxuan.commit.ui.HistoryRoute
 import dev.yxuan.commit.ui.LiveWorkoutRoute
 import dev.yxuan.commit.ui.RecapRoute
 import dev.yxuan.commit.ui.RoutineEditorRoute
 import dev.yxuan.commit.ui.SessionDetailRoute
-import dev.yxuan.commit.ui.SettingsRoute
 import dev.yxuan.commit.ui.ThemeRoute
 import dev.yxuan.commit.ui.TodayRoute
 import dev.yxuan.commit.ui.TodoEditorRoute
@@ -148,41 +152,51 @@ private fun CommitNavHost(pendingRoute: Any?, onRouteOpened: () -> Unit) {
         }
     }
 
-    // Bottom-nav tabs keep their own back stacks; Today is the root.
+    // Today, History and Settings are pages of one pager (swipe between them, or tap the bottom
+    // nav). It lives on the start destination; from a pushed tab screen (Themes, Archived, Recap)
+    // a tab tap first returns to it.
+    val pager = rememberPagerState { NavTab.entries.size }
+    val scope = rememberCoroutineScope()
+    val openLive: () -> Unit = { nav.navigate(LiveWorkoutRoute) { launchSingleTop = true } }
     val goTab: (NavTab) -> Unit = { tab ->
-        val route: Any = when (tab) {
-            NavTab.Today -> TodayRoute()
-            NavTab.History -> HistoryRoute
-            NavTab.Settings -> SettingsRoute
-        }
-        nav.navigate(route) {
-            popUpTo(nav.graph.findStartDestination().id) { saveState = true }
-            launchSingleTop = true
-            restoreState = true
-        }
+        nav.popBackStack(nav.graph.findStartDestination().id, inclusive = false)
+        scope.launch { pager.animateScrollToPage(tab.ordinal) }
     }
 
     NavHost(navController = nav, startDestination = TodayRoute()) {
         composable<TodayRoute> { entry ->
             val newCommitment = entry.toRoute<TodayRoute>().newCommitment
-            TabShell(NavTab.Today, goTab) { m ->
-                TodayScreen(
-                    onOpenCommitment = { nav.navigate(CommitmentRoute(it)) },
-                    onOpenRoutine = { nav.navigate(RoutineEditorRoute(it)) },
-                    onOpenLive = { nav.navigate(LiveWorkoutRoute) { launchSingleTop = true } },
-                    startCreating = newCommitment,
-                    modifier = m,
-                )
-            }
-        }
-        composable<HistoryRoute> {
-            TabShell(NavTab.History, goTab) { m ->
-                HistoryScreen(onOpenSession = { nav.navigate(SessionDetailRoute(it)) }, modifier = m)
-            }
-        }
-        composable<SettingsRoute> {
-            TabShell(NavTab.Settings, goTab) { m ->
-                SettingsScreen(onOpenTheme = { nav.navigate(ThemeRoute) }, onOpenArchived = { nav.navigate(ArchivedRoute) }, accountSection = { AccountSection() }, modifier = m)
+            Column(Modifier.fillMaxSize()) {
+                HorizontalPager(
+                    state = pager,
+                    modifier = Modifier.weight(1f),
+                    beyondViewportPageCount = 1,
+                    key = { NavTab.entries[it].name },
+                ) { page ->
+                    Box(Modifier.fillMaxSize().statusBarsPadding()) {
+                        when (NavTab.entries[page]) {
+                            NavTab.Commitments -> TodayScreen(
+                                onOpenCommitment = { nav.navigate(CommitmentRoute(it)) },
+                                onOpenCollection = { nav.navigate(dev.yxuan.commit.ui.CollectionRoute(it)) },
+                                onOpenRoutine = { nav.navigate(RoutineEditorRoute(it)) },
+                                onOpenLive = openLive,
+                                startCreating = newCommitment,
+                            )
+                            NavTab.Agenda -> AgendaScreen(onEditTodo = { nav.navigate(TodoEditorRoute(todoId = it)) })
+                            NavTab.History -> HistoryScreen(
+                                onOpenSession = { nav.navigate(SessionDetailRoute(it)) },
+                                onOpenDay = { nav.navigate(RecapRoute(RecapKind.NIGHT.name, it.toEpochDay())) },
+                            )
+                            NavTab.Settings -> SettingsScreen(
+                                onOpenTheme = { nav.navigate(ThemeRoute) },
+                                onOpenArchived = { nav.navigate(ArchivedRoute) },
+                                accountSection = { AccountSection() },
+                            )
+                        }
+                    }
+                }
+                LiveWorkoutBar(onOpen = openLive)
+                BottomNav(selected = NavTab.entries[pager.targetPage], onSelect = goTab)
             }
         }
         composable<ThemeRoute> {
@@ -191,8 +205,10 @@ private fun CommitNavHost(pendingRoute: Any?, onRouteOpened: () -> Unit) {
         composable<ArchivedRoute> {
             TabShell(NavTab.Settings, goTab) { m -> ArchivedScreen(onBack = { nav.popBackStack() }, modifier = m) }
         }
-        composable<RecapRoute> {
-            TabShell(NavTab.Today, goTab) { m -> RecapScreen(onBack = { nav.popBackStack() }, modifier = m) }
+        composable<RecapRoute> { entry ->
+            // A day opened from the History grid stays under History; a notification's recap under Commitments.
+            val fromHistory = entry.toRoute<RecapRoute>().epochDay != RecapRoute.NO_DAY
+            TabShell(if (fromHistory) NavTab.History else NavTab.Commitments, goTab) { m -> RecapScreen(onBack = { nav.popBackStack() }, modifier = m) }
         }
         // Pushed screens, without the bottom nav.
         composable<CommitmentRoute> {
@@ -203,7 +219,7 @@ private fun CommitNavHost(pendingRoute: Any?, onRouteOpened: () -> Unit) {
             )
         }
         composable<RoutineEditorRoute> {
-            RoutineEditorScreen(onBack = { nav.popBackStack() })
+            RoutineEditorScreen(onBack = { nav.popBackStack() }, onOpenSession = { nav.navigate(SessionDetailRoute(it)) })
         }
         composable<LiveWorkoutRoute> {
             LiveWorkoutScreen(onBack = { nav.popBackStack() })
@@ -211,13 +227,16 @@ private fun CommitNavHost(pendingRoute: Any?, onRouteOpened: () -> Unit) {
         composable<TodoEditorRoute> {
             TodoEditorScreen(onDone = { nav.popBackStack() })
         }
+        composable<dev.yxuan.commit.ui.CollectionRoute> {
+            dev.yxuan.commit.ui.collection.CollectionScreen(onBack = { nav.popBackStack() })
+        }
         composable<SessionDetailRoute> {
             SessionDetailScreen(onBack = { nav.popBackStack() })
         }
     }
 }
 
-/** Top-level screen with the bottom nav; content gets the status-bar inset. */
+/** A screen pushed from a tab (Themes, Archived, Recap) that keeps the bottom nav; content gets the status-bar inset. */
 @Composable
 private fun TabShell(tab: NavTab, onTab: (NavTab) -> Unit, content: @Composable (Modifier) -> Unit) {
     Column(Modifier.fillMaxSize()) {

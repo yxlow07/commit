@@ -15,7 +15,8 @@ import androidx.room3.PrimaryKey
  * All timestamps are epoch milliseconds (UTC).
  */
 
-enum class CommitmentType { STANDARD, WORKOUT }
+/** STANDARD holds todos, WORKOUT routines, COLLECTION a standalone collection tracker (groups of items). */
+enum class CommitmentType { STANDARD, WORKOUT, COLLECTION }
 
 @Entity(
     tableName = "commitments",

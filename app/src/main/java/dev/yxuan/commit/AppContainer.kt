@@ -51,7 +51,7 @@ class AppContainer(context: Context) {
 
     /** Sync (M7). After downloads from the server: redraw and reschedule (PRD sync rule 7). */
     val syncManager by lazy {
-        SyncManager(appContext, database, appScope) {
+        SyncManager(appContext, database, appScope, collectionPhotos) {
             widgetUpdater.refresh()
             alarmScheduler.rescheduleTodos()
             alarmScheduler.scheduleRecaps()
@@ -64,6 +64,13 @@ class AppContainer(context: Context) {
 
     val todoRepository by lazy {
         TodoRepository(database, clock, changeListener)
+    }
+
+    val collectionPhotos by lazy { dev.yxuan.commit.data.photo.CollectionPhotos(appContext) }
+
+    /** Collections are standalone: no widget, alarms or recaps, so edits only need to sync. */
+    val collectionRepository by lazy {
+        dev.yxuan.commit.data.repo.CollectionRepository(database, clock, collectionPhotos) { syncManager.requestSync() }
     }
 
     val settingsRepository by lazy {

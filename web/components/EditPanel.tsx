@@ -170,7 +170,7 @@ function PanelBody({ id, forCommitment }: { id: string; forCommitment: string | 
   const todosQ = useTable("todos");
   const commitmentsQ = useTable("commitments");
   const commitments = useMemo(
-    () => (commitmentsQ.data ?? []).filter((c) => !c.archived && c.type !== "workout").sort((a, b) => a.sort_order - b.sort_order),
+    () => (commitmentsQ.data ?? []).filter((c) => !c.archived && c.type === "standard").sort((a, b) => a.sort_order - b.sort_order),
     [commitmentsQ.data],
   );
   const todo = isNew ? undefined : todosQ.data?.find((t) => t.id === id);
@@ -260,7 +260,7 @@ function PanelBody({ id, forCommitment }: { id: string; forCommitment: string | 
   return (
     <aside
       aria-label={title}
-      className="fade-in fixed inset-0 z-40 flex flex-col bg-background sm:inset-x-0 sm:top-14 sm:z-30 sm:bg-surface md:left-auto md:top-0 md:w-[380px] md:border-l md:border-track"
+      className="fade-in fixed inset-0 z-40 flex flex-col bg-background sm:bg-surface md:left-auto md:w-[400px] md:border-l md:border-track"
       onKeyDown={(e) => {
         if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save(); }
       }}
@@ -276,7 +276,7 @@ function PanelBody({ id, forCommitment }: { id: string; forCommitment: string | 
       ) : (
         <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 pb-6 pt-1 sm:px-6">
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="todo-title" className="text-caption text-muted">Title</label>
+            <label htmlFor="todo-title" className="text-meta text-muted">Title</label>
             <TextField id="todo-title" ref={titleRef} value={draft.title} placeholder="What needs doing?" onChange={(e) => set({ title: e.target.value })}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.ctrlKey && !e.metaKey) { e.preventDefault(); save(); } }} />
           </div>

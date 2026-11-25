@@ -1,5 +1,7 @@
 package dev.yxuan.commit.sync
 
+import dev.yxuan.commit.data.photo.CollectionPhotos
+
 import android.content.Context
 import androidx.activity.ComponentActivity
 import android.util.Log
@@ -63,6 +65,7 @@ class SyncManager(
     private val context: Context,
     private val db: AppDatabase,
     private val scope: CoroutineScope,
+    private val photos: CollectionPhotos,
     private val onRemoteChange: suspend () -> Unit,
 ) {
     val isConfigured: Boolean = SyncConfig.isConfigured
@@ -81,6 +84,10 @@ class SyncManager(
 
     private val engine: SyncEngine? by lazy {
         supabase?.let { SyncEngine(db, SupabaseRemote(it), PrefsCursors(prefs)) }
+    }
+
+    private val photoSync: PhotoSync? by lazy {
+        if (!isConfigured) null else PhotoSync(db, photos, SyncConfig.supabaseUrl, SyncConfig.supabaseAnonKey)
     }
 
     private val mutex = Mutex()
@@ -137,6 +144,13 @@ class SyncManager(
             _state.update { it.copy(syncing = true) }
             try {
                 var result = engine.sync()
+                // Collection photos: uploads give items a new photo key, pushed by the round below.
+                val session = supabase?.auth?.currentSessionOrNull()
+                val userId = session?.user?.id
+                if (session != null && userId != null) {
+                    runCatching { photoSync?.sync(session.accessToken, userId) }
+                        .onFailure { Log.w("CommitSync", "Photo sync failed", it) }
+                }
                 // Writes made while this round ran are pushed now rather than waiting for the next trigger.
                 repeat(2) {
                     if (engine.pendingCount() == 0) return@repeat

@@ -24,12 +24,16 @@ const val HISTORY_WEEKS = 26
 private fun <T> ViewModel.state(flow: Flow<T>, initial: T): StateFlow<T> =
     flow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), initial)
 
-class HistoryViewModel(repo: HistoryRepository, val clock: Clock) : ViewModel() {
+class HistoryViewModel(private val repo: HistoryRepository, val clock: Clock) : ViewModel() {
     private val since = LocalDate.now(clock).minusWeeks(HISTORY_WEEKS.toLong()).atStartOfDay(clock.zone).toInstant().toEpochMilli()
 
     val completions: StateFlow<List<CompletionRow>?> = state(repo.observeCompletionsSince(since), null)
     val sessions: StateFlow<List<SessionSummary>?> = state(repo.observeSessions(), null)
     val exercisePoints: StateFlow<List<ExerciseSessionPoint>> = state(repo.observeExercisePoints(), emptyList())
+
+    fun deleteSession(id: String) {
+        viewModelScope.launch { repo.deleteSession(id) }
+    }
 }
 
 class SessionDetailViewModel(savedStateHandle: SavedStateHandle, private val repo: HistoryRepository) : ViewModel() {
@@ -43,5 +47,9 @@ class SessionDetailViewModel(savedStateHandle: SavedStateHandle, private val rep
 
     fun delete(setId: String) {
         viewModelScope.launch { repo.deleteSet(setId) }
+    }
+
+    fun deleteSession() {
+        viewModelScope.launch { repo.deleteSession(id) }
     }
 }

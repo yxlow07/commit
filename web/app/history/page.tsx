@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -8,10 +8,10 @@ import { useTable } from "@/lib/data/store";
 import { completionRows, exercisePoints, sessionSummaries } from "@/lib/data/history";
 import { choreStreaks, lateDaysByCompletion, lateness, perDay, progress, type CompletionRow } from "@/lib/domain/stats";
 import { addDays, daysBetween, startOfDay, startOfWeek } from "@/lib/domain/dates";
-import { durationMinutes, formatWeight } from "@/lib/domain/format";
+import { cssColor, durationMinutes, formatVolume, formatWeight } from "@/lib/domain/format";
 import { hhmm, lateDays, shortDate } from "@/lib/domain/labels";
 import { usePageTitle } from "@/components/AppShell";
-import { useCommitments } from "@/components/Sidebar";
+import { useCommitments } from "@/components/Nav";
 import { tint } from "@/components/Todos";
 import { Button, EmptyText, ErrorText, Icons, Loading, SectionHeading, SelectField, TextTabs, useNow } from "@/components/ui";
 
@@ -25,7 +25,7 @@ export default function HistoryPage() {
   const tab: Tab = params.get("tab") === "workouts" || params.get("tab") === "progress" ? "workouts" : "tasks";
   return (
     <div className="flex flex-col gap-8">
-      <header className="flex flex-wrap items-baseline gap-x-8 gap-y-2">
+      <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2">
         <h1 className="text-title-screen">History</h1>
         <TextTabs label="History" size="body" value={tab} onChange={(t) => router.replace(`/history?tab=${t}`, { scroll: false })}
           items={[{ id: "tasks", label: "Tasks" }, { id: "workouts", label: "Workouts" }]} />
@@ -45,12 +45,11 @@ const RANGES = [
 type Range = (typeof RANGES)[number]["id"];
 
 const longDay = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long" });
-const monthInitial = new Intl.DateTimeFormat("en-GB", { month: "narrow" });
 
-/** Heat steps as on the phone (1, 2–3, 4–5, 6–8, 9+), mixed from fill toward ink so themes follow. */
-const SHADES = [0, 20, 40, 60, 80, 100];
-const shade = (n: number) => (n >= 9 ? 5 : n >= 6 ? 4 : n >= 4 ? 3 : n >= 2 ? 2 : n >= 1 ? 1 : 0);
-const shadeColor = (step: number) => (step === 0 ? "var(--fill)" : `color-mix(in srgb, var(--ink) ${SHADES[step]}%, var(--fill))`);
+/** The app's heat shades, none to most: fill, track, faint, muted, ink (themes follow). */
+const HEAT = ["var(--fill)", "var(--track)", "var(--faint)", "var(--muted)", "var(--ink)"];
+const shade = (n: number) => (n >= 6 ? 4 : n >= 4 ? 3 : n >= 2 ? 2 : n >= 1 ? 1 : 0);
+const shadeColor = (step: number) => HEAT[step];
 
 function TasksTab() {
   const completionsQ = useTable("completions");
@@ -77,14 +76,14 @@ function TasksTab() {
   if (rows.length === 0) return <EmptyText>Finished todos and chores will show up here.</EmptyText>;
 
   const withRows = new Set(rows.map((r) => r.commitmentId));
-  const filters = [{ id: "all", label: "All" }, ...live.filter((c) => c.type !== "workout" && withRows.has(c.id)).map((c) => ({ id: c.id, label: c.name }))];
+  const filters = [{ id: "all", label: "All" }, ...live.filter((c) => c.type === "standard" && withRows.has(c.id)).map((c) => ({ id: c.id, label: c.name }))];
   const filtered = rows.filter((r) => commitment === "all" || r.commitmentId === commitment);
   const weekStart = startOfWeek(now);
   const thisWeek = filtered.filter((r) => r.doneAt >= weekStart).length;
 
   // This week by commitment: done and late.
   const table = live
-    .filter((c) => c.type !== "workout")
+    .filter((c) => c.type === "standard")
     .map((c) => {
       const mine = rows.filter((r) => r.commitmentId === c.id && r.doneAt >= weekStart);
       return { c, done: mine.length, late: mine.filter((r) => lateFlags.get(r.completionId) === true).length };
@@ -104,10 +103,10 @@ function TasksTab() {
       <section className="flex flex-col gap-3" aria-label="Finished per day">
         <Heatmap counts={perDay(filtered)} weeks={Number(range)} now={now} selected={day} onSelect={setDay} />
         <div className="flex items-center justify-between gap-4">
-          <span className="text-meta text-text-strong">{thisWeek} this week</span>
-          <span className="flex items-center gap-2 text-micro text-muted" aria-hidden>
+          <span className="text-body-l text-text-strong">{thisWeek} this week</span>
+          <span className="flex items-center gap-2.5 text-meta text-muted" aria-hidden>
             Less
-            <span className="h-2 w-[88px] rounded-full" style={{ background: `linear-gradient(to right, ${[1, 2, 3, 4, 5].map(shadeColor).join(", ")})` }} />
+            <span className="h-2.5 w-24 rounded-full" style={{ background: `linear-gradient(to right, ${HEAT.slice(1).join(", ")})` }} />
             More
           </span>
         </div>
@@ -120,26 +119,17 @@ function TasksTab() {
       </section>
 
       {table.length > 0 && day == null && commitment === "all" && (
-        <section className="flex flex-col gap-2">
-          <SectionHeading>This week by commitment</SectionHeading>
-          <table className="w-full max-w-md text-body">
-            <thead>
-              <tr className="text-left text-caption text-muted">
-                <th className="py-1 font-medium">Commitment</th>
-                <th className="w-20 py-1 text-right font-medium">Done</th>
-                <th className="w-20 py-1 text-right font-medium">Late</th>
-              </tr>
-            </thead>
-            <tbody>
-              {table.map(({ c, done, late }) => (
-                <tr key={c.id}>
-                  <td className="py-1.5">{c.name}</td>
-                  <td className="py-1.5 text-right tabular-nums">{done}</td>
-                  <td className="py-1.5 text-right tabular-nums text-danger">{late || ""}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <section className="flex flex-col">
+          <SectionHeading className="pb-1">This week</SectionHeading>
+          <ul>
+            {table.map(({ c, done, late }) => (
+              <li key={c.id} className="flex min-h-14 items-center gap-4">
+                <span className="min-w-0 flex-1 truncate text-body-l">{c.name}</span>
+                {late > 0 && <span className="text-body tabular-nums text-danger">{late} late</span>}
+                <span className="text-tab tabular-nums" style={{ color: cssColor(c.color) }} aria-label={`${done} done`}>{done}</span>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 
@@ -167,22 +157,22 @@ function Timeline({ rows, now, late, streaks }: { rows: CompletionRow[]; now: nu
   for (const r of rows) if (!seen.has(r.todoId)) { seen.add(r.todoId); latest.add(r.completionId); }
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-7">
       {[...groups].map(([d, list]) => (
-        <section key={d} className="flex flex-col gap-1">
-          <SectionHeading className="px-2">{d === today ? "Today" : d === addDays(today, -1) ? "Yesterday" : longDay.format(d)}</SectionHeading>
+        <section key={d} className="flex flex-col">
+          <SectionHeading className="pb-1">{d === today ? "Today" : d === addDays(today, -1) ? "Yesterday" : longDay.format(d)}</SectionHeading>
           <ul>
             {list.map((r) => {
               const l = late.get(r.completionId);
               const streak = latest.has(r.completionId) ? streaks.get(r.todoId) ?? 0 : 0;
               const note = l != null ? { text: l === 0 ? "Late" : lateDays(l), danger: true } : streak > 1 ? { text: `${streak} in a row`, danger: false } : null;
               return (
-                <li key={r.completionId} className="flex min-h-12 items-center gap-3 rounded-xl px-2 py-2">
+                <li key={r.completionId} className="flex min-h-16 items-center gap-3 py-2">
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-body">{r.title}</span>
+                    <span className="block truncate text-body-l">{r.title}</span>
                     <span className="block truncate text-meta" style={tint(r.commitmentColor)}>{r.commitmentName}, {hhmm(r.doneAt)}</span>
                   </span>
-                  {note && <span className={`shrink-0 text-meta ${note.danger ? "text-danger" : "text-muted"}`}>{note.text}</span>}
+                  {note && <span className={`shrink-0 text-body ${note.danger ? "text-danger" : "text-muted"}`}>{note.text}</span>}
                 </li>
               );
             })}
@@ -194,17 +184,16 @@ function Timeline({ rows, now, late, streaks }: { rows: CompletionRow[]; now: nu
 }
 
 /**
- * Heatmap: weeks as columns, Mon–Sun rows, month initials above each month's first week. Cells are
- * buttons ("Thu 20 Nov, 5 finished"); arrow keys move between days, Enter or click filters.
+ * Heatmap as in the app: weeks as columns and Mon–Sun as rows, the grid filling the column (cells
+ * square, gaps shrinking with the range), "N weeks ago" and "This week" under it. Cells are buttons
+ * ("Thu 20 Nov, 5 finished"); arrow keys move between days, Enter or click filters to that day.
  */
 function Heatmap({ counts, weeks, now, selected, onSelect }: { counts: Map<number, number>; weeks: number; now: number; selected: number | null; onSelect: (d: number | null) => void }) {
   const today = startOfDay(now);
   const first = addDays(startOfWeek(now), -7 * (weeks - 1));
-  const size = weeks >= 52 ? 10 : 12;
+  const gap = weeks >= 52 ? 2 : weeks >= 26 ? 4 : 6;
   const [focus, setFocus] = useState(selected ?? today);
   const grid = useRef<HTMLDivElement>(null);
-  const scroller = useRef<HTMLDivElement>(null);
-  useEffect(() => { scroller.current?.scrollTo({ left: scroller.current.scrollWidth }); }, [weeks]);
 
   function onKey(e: KeyboardEvent) {
     const step = { ArrowUp: -1, ArrowDown: 1, ArrowLeft: -7, ArrowRight: 7 }[e.key];
@@ -218,17 +207,16 @@ function Heatmap({ counts, weeks, now, selected, onSelect }: { counts: Map<numbe
 
   const named = (d: number) => `${shortDate(d)}, ${counts.get(d) ?? 0} finished`;
   return (
-    <div ref={scroller} className="overflow-x-auto pb-1">
-      <div ref={grid} role="grid" aria-label="Finished per day" className="inline-flex gap-[3px]" onKeyDown={onKey}>
+    <div className={`flex flex-col gap-2 ${weeks <= 12 ? "max-w-[520px]" : ""}`}>
+      <div ref={grid} role="grid" aria-label="Finished per day" className="grid w-full" onKeyDown={onKey}
+        style={{ gridTemplateColumns: `repeat(${weeks}, minmax(0, 1fr))`, gap }}>
         {Array.from({ length: weeks }, (_, w) => {
           const monday = addDays(first, w * 7);
-          const newMonth = w === 0 || new Date(monday).getMonth() !== new Date(addDays(monday, -7)).getMonth();
           return (
-            <div key={w} role="row" className="flex flex-col gap-[3px]">
-              <span aria-hidden className="h-4 text-micro leading-none text-muted" style={{ width: size }}>{newMonth ? monthInitial.format(monday) : ""}</span>
+            <div key={w} role="row" className="flex flex-col" style={{ gap }}>
               {Array.from({ length: 7 }, (_, d) => {
                 const date = addDays(monday, d);
-                if (date > today) return <span key={d} style={{ width: size, height: size }} />;
+                if (date > today) return <span key={d} className="aspect-square" />;
                 const n = counts.get(date) ?? 0;
                 return (
                   <button
@@ -242,14 +230,18 @@ function Heatmap({ counts, weeks, now, selected, onSelect }: { counts: Map<numbe
                     title={named(date)}
                     onFocus={() => setFocus(date)}
                     onClick={() => onSelect(date === selected ? null : date)}
-                    className={`cursor-pointer rounded-[3px] ${date === selected ? "ring-2 ring-ink ring-offset-1 ring-offset-background" : ""}`}
-                    style={{ width: size, height: size, background: shadeColor(shade(n)) }}
+                    className={`aspect-square cursor-pointer ${weeks >= 52 ? "rounded-[2px]" : "rounded-[4px]"} ${date === selected ? "outline-2 outline-offset-1 outline-ink" : ""}`}
+                    style={{ background: shadeColor(shade(n)) }}
                   />
                 );
               })}
             </div>
           );
         })}
+      </div>
+      <div className="flex justify-between text-meta text-muted" aria-hidden>
+        <span>{weeks >= 52 ? "A year ago" : weeks >= 26 ? "6 months ago" : `${weeks} weeks ago`}</span>
+        <span>This week</span>
       </div>
     </div>
   );
@@ -275,6 +267,7 @@ function WorkoutsTab() {
   );
   const names = useMemo(() => [...new Map(points.map((p) => [p.exerciseName.toLowerCase(), p.exerciseName])).values()].sort(), [points]);
   const [selected, setSelected] = useState<string | null>(null);
+  const [byRoutine, setByRoutine] = useState(false);
 
   if (sessionsQ.isPending || setsQ.isPending || routinesQ.isPending || exercisesQ.isPending) return <Loading />;
   if (summaries.length === 0) return <EmptyText>Finished workouts will show up here.</EmptyText>;
@@ -296,7 +289,7 @@ function WorkoutsTab() {
       {names.length > 0 && (
         names.length > 6 ? (
           <label className="flex max-w-64 flex-col gap-1.5">
-            <span className="text-caption text-muted">Exercise</span>
+            <span className="text-meta text-muted">Exercise</span>
             <SelectField value={exercise} onChange={(e) => setSelected(e.target.value)}>
               {names.map((n) => <option key={n} value={n}>{n}</option>)}
             </SelectField>
@@ -310,7 +303,7 @@ function WorkoutsTab() {
         <section className="flex flex-col gap-4">
           <div>
             <p className="text-display-l tabular-nums">{formatWeight(best.bestWeight)} × {best.bestReps}</p>
-            <p className="text-meta text-muted">Best set, since {dayMonth.format(mine[0].startedAt)}</p>
+            <p className="mt-2 text-body text-muted">Best set, since {dayMonth.format(mine[0].startedAt)}</p>
           </div>
           {data.length > 1 && (
             <figure className="flex flex-col gap-1">
@@ -343,7 +336,7 @@ function WorkoutsTab() {
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-              <figcaption className="flex justify-between text-micro text-muted" aria-hidden>
+              <figcaption className="flex justify-between text-meta text-muted" aria-hidden>
                 <span>{formatWeight(firstPoint.weight)}, {ago(firstPoint.at)}</span>
                 <span>{startOfWeek(lastPoint.at) === startOfWeek(now) ? "This week" : dayMonth.format(lastPoint.at)}</span>
               </figcaption>
@@ -352,23 +345,43 @@ function WorkoutsTab() {
         </section>
       )}
 
-      <section className="flex flex-col gap-1">
-        <SectionHeading className="px-2">Sessions</SectionHeading>
-        <ul>
-          {summaries.map((s) => (
-            <li key={s.session.id}>
-              <Link href={`/session?id=${s.session.id}`} className="flex min-h-12 items-center gap-3 rounded-xl px-2 py-2.5 hover:bg-hover">
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-body">{s.routineName}</span>
-                  <span className="block text-meta text-muted">{durationMinutes(s.session.started_at, s.session.ended_at)} min, {s.setCount === 1 ? "1 set" : `${s.setCount} sets`}</span>
-                </span>
-                <span className="text-meta tabular-nums text-muted">{shortDate(s.session.started_at)}</span>
-                <span className="text-faint">{Icons.chevron}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+      <section className="flex flex-col">
+        <div className="flex min-h-11 items-end justify-between gap-4">
+          <SectionHeading className="pb-2.5">Workouts</SectionHeading>
+          <TextTabs label="Group" value={byRoutine ? "routine" : "sessions"} onChange={(v) => setByRoutine(v === "routine")}
+            items={[{ id: "sessions", label: "Sessions" }, { id: "routine", label: "By routine" }]} />
+        </div>
+        {byRoutine ? (
+          [...new Map(summaries.map((x) => [x.session.routine_id, x.routineName])).entries()].map(([rid, name]) => (
+            <div key={rid} className="flex flex-col">
+              <h3 className="pb-1 pt-5 text-body-l font-bold">{name}</h3>
+              <ul>{summaries.filter((x) => x.session.routine_id === rid).map((x) => <SessionRow key={x.session.id} s={x} />)}</ul>
+            </div>
+          ))
+        ) : (
+          <ul>{summaries.map((x) => <SessionRow key={x.session.id} s={x} title={x.routineName} />)}</ul>
+        )}
       </section>
     </div>
+  );
+}
+
+const sessionWhen = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short" });
+const sessionTime = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
+
+/** One session: the routine (or, grouped by routine, the date) over "Tue 24 Nov, 18:10, 52 min, 9 sets, 1,240 kg". */
+function SessionRow({ s, title }: { s: ReturnType<typeof sessionSummaries>[number]; title?: string }) {
+  const when = `${sessionWhen.format(s.session.started_at).replace(",", "")}, ${sessionTime.format(s.session.started_at)}`;
+  const meta = `${durationMinutes(s.session.started_at, s.session.ended_at)} min, ${s.setCount === 1 ? "1 set" : `${s.setCount} sets`}, ${formatVolume(s.volume)}`;
+  return (
+    <li>
+      <Link href={`/session?id=${s.session.id}`} className="-mx-3 flex min-h-16 items-center gap-3 rounded-xl px-3 py-2 hover:bg-hover">
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-body-l tabular-nums">{title ?? when}</span>
+          <span className="block truncate text-meta tabular-nums text-muted">{title ? `${when}, ${meta}` : meta}</span>
+        </span>
+        <span className="text-faint">{Icons.chevron}</span>
+      </Link>
+    </li>
   );
 }

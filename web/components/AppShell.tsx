@@ -2,8 +2,6 @@
 
 import { createContext, use, useContext, useEffect, useState, type ReactNode } from "react";
 import { browser } from "react-dom";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Session, User } from "@supabase/supabase-js";
 import { isConfigured, supabase } from "@/lib/data/supabase";
@@ -11,10 +9,10 @@ import { useRealtime } from "@/lib/data/realtime";
 import { EditPanel, PanelProvider, usePanel } from "./EditPanel";
 import { OfflineLine, OnlineProvider } from "./Online";
 import { Shortcuts } from "./Shortcuts";
-import { PAGES, Sidebar, usePageActive } from "./Sidebar";
+import { BottomNav, TopNav } from "./Nav";
 import { ThemeProvider } from "./ThemeProvider";
 import { ToastProvider } from "./Toast";
-import { Button, IconButton, Icons, Logo, RoundAdd } from "./ui";
+import { Button, Logo } from "./ui";
 
 const UserContext = createContext<User | null>(null);
 
@@ -74,19 +72,14 @@ function useSession(): Session | null | undefined {
 }
 
 /**
- * The shell (web spec, "App shell"): a sidebar and one main column, with the edit panel beside
- * the list. Wide (1200+): the panel pushes the column; desktop (900+): it slides over; narrow
- * (600+): a top bar and a drawer; phone: the phone app's bottom nav.
+ * The shell, laid out like the app: one left-aligned column (680 px max) centred on the page, the
+ * app's four tabs above it (600 px and up) or as its bottom bar (phone). The edit panel opens
+ * beside the column: it pushes the column on wide screens and slides over it below 1200 px.
  */
 function SignedIn({ userId, children }: { userId: string; children: ReactNode }) {
   useRealtime(userId);
   const panel = usePanel();
-  const pathname = usePathname();
   const [title, setTitle] = useState("");
-  // The drawer belongs to the page it was opened on, so navigating closes it.
-  const [drawerPath, setDrawerPath] = useState<string | null>(null);
-  const drawer = drawerPath === pathname;
-  const setDrawer = (open: boolean) => setDrawerPath(open ? pathname : null);
 
   return (
     <TitleContext value={setTitle}>
@@ -94,53 +87,20 @@ function SignedIn({ userId, children }: { userId: string; children: ReactNode })
       <title>{title ? `${title} – Commit` : "Commit"}</title>
       <div className="min-h-dvh">
         <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-surface focus:p-3">Skip to content</a>
-
-        <div className="fixed inset-y-0 left-0 hidden w-60 overflow-y-auto md:block lg:w-[260px]">
-          <Sidebar />
+        <div className={`transition-[padding] duration-200 ${panel.current ? "lg:pr-[400px]" : ""}`}>
+          <div className="mx-auto w-full max-w-[728px] px-6 sm:px-8">
+            <TopNav />
+            <main id="main" className="pb-32 pt-12 sm:pb-24 sm:pt-10">
+              <OfflineLine />
+              {children}
+            </main>
+          </div>
         </div>
-
-        {/* Narrow: top bar, the sidebar as a drawer over the scrim. */}
-        <header className="sticky top-0 z-20 hidden h-14 items-center gap-2 bg-background/95 px-3 backdrop-blur sm:flex md:hidden">
-          <IconButton label="Menu" aria-expanded={drawer} onClick={() => setDrawer(true)}>{Icons.menu}</IconButton>
-          <span className="min-w-0 flex-1 truncate text-label font-bold">{title}</span>
-          <RoundAdd label="Add todo" className="size-10" onClick={() => panel.openNew()} />
-        </header>
-        {drawer && (
-          <div className="fixed inset-0 z-40 md:hidden" onKeyDown={(e) => e.key === "Escape" && setDrawer(false)}>
-            <div className="fade-in absolute inset-0 bg-scrim" onClick={() => setDrawer(false)} />
-            <div className="fade-in absolute inset-y-0 left-0 w-[280px] overflow-y-auto bg-surface">
-              <Sidebar />
-            </div>
-          </div>
-        )}
-
-        <main id="main" className={`pb-28 sm:pb-16 md:pl-60 lg:pl-[260px] ${panel.current ? "lg:pr-[380px]" : ""}`}>
-          <div className="mx-auto max-w-[720px] px-6 pt-12 sm:px-8 sm:pt-8 md:pt-12">
-            <OfflineLine />
-            {children}
-          </div>
-        </main>
-
         <BottomNav />
         <EditPanel />
         <Shortcuts />
       </div>
     </TitleContext>
-  );
-}
-
-/** Phone: Today, History, Settings as text, as in the app. */
-function BottomNav() {
-  const active = usePageActive();
-  return (
-    <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-20 grid h-[72px] grid-cols-3 bg-surface sm:hidden">
-      {PAGES.map((p) => (
-        <Link key={p.href} href={p.href} aria-current={active(p.href) ? "page" : undefined}
-          className={`flex items-center justify-center text-[0.875rem] ${active(p.href) ? "font-bold text-ink" : "text-muted"}`}>
-          {p.label}
-        </Link>
-      ))}
-    </nav>
   );
 }
 

@@ -4,6 +4,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.dp
+import dev.yxuan.commit.ui.components.SectionHeading
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Text
@@ -52,7 +60,7 @@ fun LiveWorkoutScreen(
         }
         val l = live
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = Space.screenSide).padding(top = Space.xxl),
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Space.screenSide).padding(top = Space.xxl, bottom = Space.xxl),
             verticalArrangement = Arrangement.spacedBy(Space.l),
         ) {
             if (l == null) {
@@ -74,6 +82,9 @@ private fun LiveContent(live: LiveWorkout, vm: LiveWorkoutViewModel, onFinished:
         Text(WorkoutFormat.summary(live), style = t.bodyL, color = c.textStrong)
         Spacer(Modifier.height(Space.s))
         PrimaryButton("Done", onClick = { vm.end(); onFinished() }, modifier = Modifier.fillMaxWidth())
+        live.exercise?.takeIf { live.canExtraSet }?.let { last ->
+            SecondaryButton("One more set of ${last.name}", onClick = vm::extraSet, modifier = Modifier.fillMaxWidth())
+        }
         return
     }
     val ex = live.exercise ?: return
@@ -85,19 +96,21 @@ private fun LiveContent(live: LiveWorkout, vm: LiveWorkoutViewModel, onFinished:
         Text(ex.name, style = t.bodyL.copy(fontWeight = FontWeight.Bold), color = c.ink, modifier = Modifier.weight(1f))
         Text(WorkoutFormat.position(live), style = t.caption, color = c.muted)
     }
-    SetProgress(s.setNo, ex.sets)
+    SetProgress(s.setNo, ex.sets, label = WorkoutFormat.setOf(s.setNo, ex.sets))
     Spacer(Modifier.height(Space.s))
     when (s.phase) {
         WorkoutPhase.READY -> {
             if (live.isTimed) {
                 Text("${ex.durationSeconds} s", style = t.displayXl, color = c.ink, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
                 PrimaryButton("Start set", onClick = vm::primary, modifier = Modifier.fillMaxWidth())
+                SetActions(vm, canEnd = true)
             } else {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.m)) {
                     Stepper(s.reps.toString(), "reps", { vm.stepReps(-1) }, { vm.stepReps(1) }, "Fewer reps", "More reps", Modifier.weight(1f))
                     Stepper(WorkoutFormat.weightValue(s.weight), "kg", { vm.stepWeight(-1) }, { vm.stepWeight(1) }, "Less weight", "More weight", Modifier.weight(1f))
                 }
                 PrimaryButton("Done set", onClick = vm::primary, modifier = Modifier.fillMaxWidth())
+                SetActions(vm, canEnd = true)
             }
         }
         WorkoutPhase.REST, WorkoutPhase.WORK -> {
@@ -129,16 +142,83 @@ private fun LiveContent(live: LiveWorkout, vm: LiveWorkoutViewModel, onFinished:
                     PrimaryButton("Done early", onClick = vm::skip, modifier = Modifier.weight(1f))
                 }
             }
+            // The exercise's planned sets are done: another set of it, instead of moving on.
+            if (live.canExtraSet) {
+                SecondaryButton("One more set of ${ex.name}", onClick = vm::extraSet, modifier = Modifier.fillMaxWidth().padding(top = Space.s))
+            } else if (s.phase == WorkoutPhase.REST) {
+                // Sets of this exercise are still to come: drop them and go to the next exercise.
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                    TextAction("End exercise", onClick = vm::endExercise, muted = true)
+                }
+            }
         }
         WorkoutPhase.COMPLETE -> Unit
     }
-    if (live.sets.isNotEmpty()) {
+    if (live.doneSets.isNotEmpty()) {
         Text(
-            "${live.sets.size} ${if (live.sets.size == 1) "set" else "sets"} done, ${WorkoutFormat.volume(live.volume)}",
+            "${live.doneSets.size} ${if (live.doneSets.size == 1) "set" else "sets"} done, ${WorkoutFormat.volume(live.volume)}",
             style = t.caption.tnum(),
             color = c.muted,
             modifier = Modifier.padding(top = Space.l),
         )
+    }
+    if (live.exercises.size > 1) ExerciseChooser(live, onChoose = vm::choose)
+}
+
+/** Under "Done set": pass this set over, or drop the rest of the exercise and move on. */
+@Composable
+private fun SetActions(vm: LiveWorkoutViewModel, canEnd: Boolean) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        TextAction("Skip set", onClick = vm::skipSet, muted = true, modifier = Modifier.offset(x = (-12).dp))
+        if (canEnd) TextAction("End exercise", onClick = vm::endExercise, muted = true, modifier = Modifier.offset(x = 12.dp))
+    }
+}
+
+/**
+ * Every exercise of the routine with its progress. Between sets or during a rest, tapping one
+ * with sets left makes it the next exercise (do them in any order); finished ones say "Done".
+ */
+@Composable
+private fun ExerciseChooser(live: LiveWorkout, onChoose: (Int) -> Unit) {
+    val c = Commit.colors
+    val t = Commit.type
+    val canSwitch = live.state.phase == WorkoutPhase.READY || live.state.phase == WorkoutPhase.REST
+    Column(Modifier.fillMaxWidth().padding(top = Space.l)) {
+        SectionHeading("Exercises")
+        live.exercises.forEachIndexed { i, ex ->
+            val done = live.doneOf(i)
+            val current = i == live.state.exerciseIndex
+            val extra = current && done >= ex.sets && live.state.phase != WorkoutPhase.REST
+            val finished = done >= ex.sets && !extra
+            val enabled = canSwitch && !finished && !(current && live.state.phase == WorkoutPhase.READY)
+            val detail = when {
+                extra -> "Now, extra set"
+                finished -> "Done"
+                current && live.state.phase == WorkoutPhase.REST -> "$done of ${ex.sets} sets, resting"
+                current -> "Now, set ${done + 1} of ${ex.sets}"
+                done > 0 -> "$done of ${ex.sets} sets"
+                else -> "${ex.sets} sets"
+            }
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 56.dp)
+                    .clickable(enabled = enabled, onClickLabel = "Do ${ex.name} next") { onChoose(i) }
+                    .semantics(mergeDescendants = true) {},
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
+                    Text(
+                        ex.name,
+                        style = t.body.copy(fontWeight = if (current) FontWeight.Bold else FontWeight.Normal),
+                        color = if (finished) c.muted else c.ink,
+                        textDecoration = if (finished) TextDecoration.LineThrough else null,
+                    )
+                    Text(detail, style = t.meta.tnum(), color = c.muted)
+                }
+                if (enabled) Text("Do next", style = t.label, color = c.ink)
+            }
+        }
     }
 }
 

@@ -109,4 +109,49 @@ class RecapTest {
         assertEquals("Mon, Tue, Wed, Thu, Sat", Weekdays.label(31 - 16 + 32, Locale.UK))
         assertEquals(1, Weekdays.toggle(mask, DayOfWeek.THURSDAY))
     }
+
+    private fun session(day: Int, h: Int, minutes: Int) = SessionSummary(
+        WorkoutSessionEntity(id = "s$day$h", updatedAt = 0, routineId = "push", startedAt = millis(day, h), endedAt = millis(day, h, minutes)),
+        routineName = "Push Day", volume = 3450.0, setCount = 12,
+    )
+
+    @Test
+    fun linesHaveAStatusColumnWithLateInRed() {
+        val completed = listOf(
+            CompletionRow("c1", "Notes", "Notes", "study", "Study", 0, millis(21, 10), null, false, null),
+            CompletionRow("c2", "Report", "Report", "study", "Study", 0, millis(21, 11), millis(20), false, null),
+        )
+        val recap = RecapBuilder(nightClock, Locale.UK).build(RecapKind.NIGHT, input(completed))
+        val done = recap.sections.first { it.title == "Done today" }.items
+        assertEquals(RecapLine("10:00", "Notes", "Study", color = 0, text = "Notes, Study"), done[0])
+        // Finished a day after it was due: "Late" in red, how late in the detail.
+        assertEquals("Late", done[1].status)
+        assertTrue(done[1].late)
+        assertEquals("Study, 1 day late", done[1].detail)
+        val essay = recap.sections.first { it.title == "Still open" }.items.first { it.title == "Essay" }
+        assertEquals("Late", essay.status)
+        assertTrue(essay.late)
+        assertEquals("Study", essay.detail)
+    }
+
+    @Test
+    fun morningAlsoShowsWorkoutsDoneSoFar() {
+        val recap = RecapBuilder(clockAt(9, 0), Locale.UK).build(RecapKind.MORNING, input(sessions = listOf(session(21, 7, 45))))
+        val done = recap.sections.first { it.title == "Done today" }.items
+        assertEquals(RecapLine("07:00", "Push Day", "45 min, 3,450 kg", text = "Push Day, 45 min, 3,450 kg"), done.single())
+    }
+
+    @Test
+    fun reviewingAPastDayShowsWhatWasDoneTheWorkoutAndWhatWasMissed() {
+        val completed = listOf(CompletionRow("c1", "Notes", "Notes", "study", "Study", 0, millis(19, 10), null, false, null))
+        val recap = RecapBuilder(nightClock, Locale.UK).day(LocalDate.of(2026, 11, 19), input(completed, listOf(session(19, 18, 40))))
+        val byTitle = recap.sections.associate { it.title to it.lines }
+        assertEquals(listOf("Notes, Study"), byTitle["Done"])
+        assertEquals(listOf("Push Day, 40 min, 3,450 kg"), byTitle["Workout"])
+        // The essay was due on the 19th and is still open.
+        assertEquals(listOf("Essay, Late"), byTitle["Was due, still open"])
+        assertEquals("1 done, 1 workout, 1 missed", recap.title)
+        // Today's review is the night recap.
+        assertEquals("Nothing done today, 4 still open", RecapBuilder(nightClock, Locale.UK).day(LocalDate.of(2026, 11, 21), input()).title)
+    }
 }

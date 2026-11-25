@@ -4,6 +4,7 @@ import androidx.room3.useReaderConnection
 import androidx.room3.useWriterConnection
 import androidx.room3.immediateTransaction
 import dev.yxuan.commit.data.db.AppDatabase
+import kotlinx.coroutines.CancellationException
 
 /** The server side of sync (Supabase PostgREST in the app, a fake in tests). Rows travel as JSON arrays. */
 interface SyncRemote {
@@ -44,11 +45,21 @@ class SyncEngine(
 ) {
     private val columns = HashMap<String, List<String>>()
 
+    /**
+     * One push + pull of every table. A table that fails (e.g. one the server doesn't have yet,
+     * before a migration is applied) doesn't stop the others; the first error is rethrown at the end.
+     */
     suspend fun sync(): SyncResult {
         var pushed = 0
         var pulled = 0
-        for (table in TABLES) pushed += push(table)
-        for (table in TABLES) pulled += pull(table)
+        var failure: Exception? = null
+        for (table in TABLES) {
+            try { pushed += push(table) } catch (e: CancellationException) { throw e } catch (e: Exception) { if (failure == null) failure = e }
+        }
+        for (table in TABLES) {
+            try { pulled += pull(table) } catch (e: CancellationException) { throw e } catch (e: Exception) { if (failure == null) failure = e }
+        }
+        failure?.let { throw it }
         return SyncResult(pushed, pulled)
     }
 
@@ -137,21 +148,22 @@ class SyncEngine(
         }
     }
 
-    /** Synced columns of [table]: everything except the phone-only `dirty` flag. */
+    /** Synced columns of [table]: everything except the phone-only flags (`dirty`, `photo_dirty`). */
     private suspend fun columns(table: String): List<String> = columns.getOrPut(table) {
         db.useReaderConnection { c ->
             c.usePrepared("PRAGMA table_info(\"$table\")") { st ->
                 buildList { while (st.step()) add(st.getText(1)) }
             }
-        }.filter { it != "dirty" }
+        }.filter { it !in PHONE_ONLY_COLUMNS }
     }
 
     companion object {
         /** Synced tables, parents first. `active_workout` is phone-only. */
         val TABLES = listOf(
             "commitments", "todos", "completions", "routines", "exercises",
-            "workout_sessions", "workout_sets", "themes", "settings",
+            "workout_sessions", "workout_sets", "collection_groups", "collection_items", "themes", "settings",
         )
+        private val PHONE_ONLY_COLUMNS = setOf("dirty", "photo_dirty")
         const val PUSH_BATCH = 200
         const val PULL_PAGE = 500
         const val OVERLAP_MS = 5 * 60_000L

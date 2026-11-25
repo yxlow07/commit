@@ -28,7 +28,7 @@ data class SessionSummary(
 private const val SESSION_SUMMARY_SELECT =
     "SELECT s.*, r.name AS routineName, " +
         "(SELECT COALESCE(SUM(w.reps * w.weight), 0) FROM workout_sets w WHERE w.session_id = s.id AND w.deleted = 0) AS volume, " +
-        "(SELECT COUNT(*) FROM workout_sets w WHERE w.session_id = s.id AND w.deleted = 0) AS setCount " +
+        "(SELECT COUNT(*) FROM workout_sets w WHERE w.session_id = s.id AND w.deleted = 0 AND w.skipped = 0) AS setCount " +
         "FROM workout_sessions s JOIN routines r ON r.id = s.routine_id WHERE s.deleted = 0 "
 
 @Dao
@@ -109,6 +109,10 @@ interface WorkoutSessionDao {
     @Query(SESSION_SUMMARY_SELECT + "AND s.ended_at IS NOT NULL ORDER BY s.started_at DESC")
     fun observeFinishedSummaries(): Flow<List<SessionSummary>>
 
+    /** One routine's finished sessions, newest first (the routine screen's History). */
+    @Query(SESSION_SUMMARY_SELECT + "AND s.routine_id = :routineId AND s.ended_at IS NOT NULL ORDER BY s.started_at DESC")
+    fun observeFinishedForRoutine(routineId: String): Flow<List<SessionSummary>>
+
     /** Local retention: synced sessions that ended before [cutoff] and have no unsynced sets. Sets go first ([WorkoutSetDao.pruneForOldSessions]). */
     @Query(
         """DELETE FROM workout_sessions WHERE ended_at IS NOT NULL AND ended_at < :cutoff AND dirty = 0
@@ -148,7 +152,7 @@ interface WorkoutSetDao {
     @Query(
         "SELECT w.*, e.name AS exerciseName, e.sort_order AS exerciseOrder FROM workout_sets w " +
             "JOIN exercises e ON e.id = w.exercise_id " +
-            "WHERE w.session_id = :sessionId AND w.deleted = 0 ORDER BY e.sort_order, w.set_no, w.done_at"
+            "WHERE w.session_id = :sessionId AND w.deleted = 0 AND w.skipped = 0 ORDER BY e.sort_order, w.set_no, w.done_at"
     )
     fun observeRowsForSession(sessionId: String): Flow<List<SetRow>>
 
@@ -167,6 +171,10 @@ interface WorkoutSetDao {
 
     @Query("SELECT * FROM workout_sets WHERE session_id = :sessionId AND deleted = 0 ORDER BY done_at")
     suspend fun getForSession(sessionId: String): List<WorkoutSetEntity>
+
+    /** Soft-deletes a session's sets (synced as deletions), when the session itself is deleted. */
+    @Query("UPDATE workout_sets SET deleted = 1, dirty = 1, updated_at = :now WHERE session_id = :sessionId AND deleted = 0")
+    suspend fun softDeleteForSession(sessionId: String, now: Long)
 
     /**
      * Local retention: the sets of the sessions [WorkoutSessionDao.pruneOld] is about to delete. Picked by

@@ -72,15 +72,21 @@ fun CommitmentDialog(
     onDismiss: () -> Unit,
     onSave: (name: String, type: CommitmentType, color: Int, showInWidget: Boolean) -> Unit,
     onArchive: (() -> Unit)? = null,
+    /** The type a new commitment starts as (e.g. Collection from the Collections section's +). */
+    initialType: CommitmentType = CommitmentType.STANDARD,
 ) {
     val c = Commit.colors
     var name by rememberSaveable { mutableStateOf(initial?.name ?: "") }
     var color by rememberSaveable { mutableStateOf(initial?.color ?: CommitmentPalette.first()) }
-    var type by rememberSaveable { mutableStateOf(initial?.type ?: CommitmentType.STANDARD) }
+    var type by rememberSaveable { mutableStateOf(initial?.type ?: initialType) }
     var showInWidget by rememberSaveable { mutableStateOf(initial?.showInWidget ?: true) }
 
     CommitDialog(
-        title = if (initial == null) "New commitment" else "Edit commitment",
+        title = when (initial?.type ?: type) {
+            CommitmentType.COLLECTION -> if (initial == null) "New collection" else "Edit collection"
+            CommitmentType.WORKOUT -> if (initial == null) "New workout" else "Edit workout"
+            CommitmentType.STANDARD -> if (initial == null) "New commitment" else "Edit commitment"
+        },
         onDismiss = onDismiss,
         actions = {
             // Archive bottom left, like the trash in the todo and exercise editors.
@@ -90,7 +96,11 @@ fun CommitmentDialog(
             }
             TextAction("Cancel", onClick = onDismiss)
             PrimaryButton(
-                if (initial == null) "Add commitment" else "Save",
+                if (initial != null) "Save" else when (type) {
+                    CommitmentType.COLLECTION -> "Add collection"
+                    CommitmentType.WORKOUT -> "Add workout"
+                    CommitmentType.STANDARD -> "Add commitment"
+                },
                 onClick = { onSave(name, type, color, showInWidget) },
                 enabled = name.isNotBlank(),
             )
@@ -105,9 +115,10 @@ fun CommitmentDialog(
         if (initial == null) {
             Column {
                 FieldLabel("Type")
-                SegmentedControl(CommitmentType.entries, type, { type = it }, label = { if (it == CommitmentType.STANDARD) "Todos" else "Workout" })
+                SegmentedControl(CommitmentType.entries, type, { type = it }, label = { when (it) { CommitmentType.STANDARD -> "Todos"; CommitmentType.WORKOUT -> "Workout"; CommitmentType.COLLECTION -> "Collection" } })
             }
-        } else {
+        } else if (initial.type != CommitmentType.COLLECTION) {
+            // Collections never show on the widget.
             Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Show on widget", style = Commit.type.body, color = c.ink, modifier = Modifier.weight(1f))
                 CommitSwitch(showInWidget, { showInWidget = it })
@@ -135,7 +146,7 @@ fun CommitmentDialog(
                 }
             }
         }
-        if (initial != null && initial.type != CommitmentType.WORKOUT) {
+        if (initial != null && initial.type == CommitmentType.STANDARD) {
             Text("To reorder, drag a commitment's handle on Today.", style = Commit.type.meta, color = c.muted)
         }
     }

@@ -38,6 +38,7 @@ import dev.yxuan.commit.ui.components.ScreenTitle
 import dev.yxuan.commit.ui.components.SectionHeading
 import dev.yxuan.commit.ui.components.TextAction
 import dev.yxuan.commit.ui.format.WorkoutFormat
+import dev.yxuan.commit.ui.workout.DeleteSessionDialog
 import dev.yxuan.commit.ui.theme.Commit
 import dev.yxuan.commit.ui.theme.Space
 import dev.yxuan.commit.ui.theme.tnum
@@ -48,10 +49,13 @@ fun SessionDetailScreen(onBack: () -> Unit, viewModel: SessionDetailViewModel = 
     val session by viewModel.session.collectAsStateWithLifecycle()
     val sets by viewModel.sets.collectAsStateWithLifecycle()
     var editing by remember { mutableStateOf<SetRow?>(null) }
+    var confirmDelete by remember { mutableStateOf(false) }
     val c = Commit.colors
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        PushedTopBar(onBack = onBack, backLabel = "Back to History")
+        PushedTopBar(onBack = onBack, backLabel = "Back") {
+            if (session != null) TextAction("Delete session", onClick = { confirmDelete = true }, muted = true)
+        }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = Space.screenSide, end = Space.screenSide, top = Space.l, bottom = Space.xxxl)) {
             session?.let { s ->
                 item {
@@ -82,6 +86,14 @@ fun SessionDetailScreen(onBack: () -> Unit, viewModel: SessionDetailViewModel = 
                     }
                 }
             }
+        }
+    }
+
+    session?.takeIf { confirmDelete }?.let { s ->
+        DeleteSessionDialog(s, onDismiss = { confirmDelete = false }) {
+            viewModel.deleteSession()
+            confirmDelete = false
+            onBack()
         }
     }
 

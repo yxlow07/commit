@@ -11,6 +11,7 @@ import androidx.room3.migration.AutoMigrationSpec
 import androidx.sqlite.SQLiteDriver
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import dev.yxuan.commit.data.db.dao.ActiveWorkoutDao
+import dev.yxuan.commit.data.db.dao.CollectionDao
 import dev.yxuan.commit.data.db.dao.CommitmentDao
 import dev.yxuan.commit.data.db.dao.CompletionDao
 import dev.yxuan.commit.data.db.dao.ExerciseDao
@@ -21,6 +22,8 @@ import dev.yxuan.commit.data.db.dao.TodoDao
 import dev.yxuan.commit.data.db.dao.WorkoutSessionDao
 import dev.yxuan.commit.data.db.dao.WorkoutSetDao
 import dev.yxuan.commit.data.db.entity.ActiveWorkoutEntity
+import dev.yxuan.commit.data.db.entity.CollectionGroupEntity
+import dev.yxuan.commit.data.db.entity.CollectionItemEntity
 import dev.yxuan.commit.data.db.entity.CommitmentEntity
 import dev.yxuan.commit.data.db.entity.CompletionEntity
 import dev.yxuan.commit.data.db.entity.ExerciseEntity
@@ -44,8 +47,10 @@ import kotlinx.coroutines.Dispatchers
         ThemeEntity::class,
         SettingsEntity::class,
         ActiveWorkoutEntity::class,
+        CollectionGroupEntity::class,
+        CollectionItemEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2), // M4: phone-only active_workout table
@@ -53,6 +58,7 @@ import kotlinx.coroutines.Dispatchers
         AutoMigration(from = 3, to = 4, spec = DropDirtyColumns::class), // M7 (PowerSync, later removed)
         AutoMigration(from = 4, to = 5), // M7: hand-written sync, `dirty` back (default 1 = upload everything)
         AutoMigration(from = 5, to = 6), // M10: todos.recur_days, todos.reminder_lead_minutes
+        AutoMigration(from = 6, to = 7), // Collections: collection_groups, collection_items
     ],
 )
 @ColumnTypeConverters(Converters::class)
@@ -67,6 +73,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun themeDao(): ThemeDao
     abstract fun settingsDao(): SettingsDao
     abstract fun activeWorkoutDao(): ActiveWorkoutDao
+    abstract fun collectionDao(): CollectionDao
 
     companion object {
         const val FILE_NAME = "commit.db"

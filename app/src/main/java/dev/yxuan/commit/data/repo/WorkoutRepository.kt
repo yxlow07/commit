@@ -30,12 +30,31 @@ data class LiveWorkout(
     val isTimed: Boolean get() = (exercise?.durationSeconds ?: 0) > 0
     val volume: Double get() = WorkoutEngine.volume(sets.map { it.reps to it.weight })
 
-    /**
-     * What ends the rest: "Next exercise" after an exercise's last set, otherwise "Next set".
-     * During a rest, setNo is still the set just finished.
-     */
+    /** Sets actually done (skipped ones left out), for "4 sets done" and summaries. */
+    val doneSets: List<WorkoutSetEntity> get() = sets.filter { !it.skipped }
+
+    /** Sets done per exercise id this session. */
+    val doneCounts: Map<String, Int> get() = WorkoutEngine.doneCounts(sets)
+
+    fun doneOf(index: Int): Int = exercises.getOrNull(index)?.let { doneCounts[it.id] ?: 0 } ?: 0
+    fun remainingOf(index: Int): Int = exercises.getOrNull(index)?.let { it.sets - doneOf(index) } ?: 0
+
+    /** The exercise after the current one that still has sets left (wrapping), as the engine picks it. */
+    val nextExercise: ExerciseEntity?
+        get() = (1..exercises.size).map { (state.exerciseIndex + it) % exercises.size }
+            .firstOrNull { it != state.exerciseIndex && remainingOf(it) > 0 }?.let { exercises[it] }
+
+    /** The current exercise still has sets after the one just logged (during a rest). */
+    private val moreOfThis: Boolean get() = remainingOf(state.exerciseIndex) > 0
+
+    /** The current exercise's planned sets are done and it is resting or the workout is done: "One more set" applies. */
+    val canExtraSet: Boolean
+        get() = exercise != null && remainingOf(state.exerciseIndex) <= 0 &&
+            (state.phase == WorkoutPhase.REST || state.phase == WorkoutPhase.COMPLETE)
+
+    /** What ends the rest: "Next exercise" after an exercise's last set, otherwise "Next set". */
     val nextLabel: String
-        get() = if (state.setNo >= (exercise?.sets ?: 0)) "Next exercise" else "Next set"
+        get() = if (moreOfThis) "Next set" else "Next exercise"
 
     /** The rest has run out and is waiting for "Next set" (shown as red overtime). */
     fun restOver(now: Long): Boolean = state.phase == WorkoutPhase.REST && (state.phaseEndsAt ?: Long.MAX_VALUE) <= now
@@ -44,8 +63,7 @@ data class LiveWorkout(
     val upNext: String?
         get() {
             val ex = exercise ?: return null
-            return if (state.setNo < ex.sets) "${ex.name}, set ${state.setNo + 1}"
-            else exercises.getOrNull(state.exerciseIndex + 1)?.name
+            return if (moreOfThis) "${ex.name}, set ${doneOf(state.exerciseIndex) + 1}" else nextExercise?.name
         }
 }
 
@@ -112,6 +130,12 @@ class WorkoutRepository(
 
     suspend fun primary() = mutate { engine, s, now -> engine.primary(s, now) }
     suspend fun skip() = mutate { engine, s, now -> engine.skip(s, now) }
+
+    /** Do another exercise next (any with sets left), between sets or during a rest. */
+    suspend fun choose(exerciseIndex: Int) = mutate { engine, s, now -> engine.choose(s, exerciseIndex, now) }
+    suspend fun extraSet() = mutate { engine, s, now -> engine.extraSet(s, now) }
+    suspend fun skipSet() = mutate { engine, s, now -> engine.skipSet(s, now) }
+    suspend fun endExercise() = mutate { engine, s, now -> engine.endExercise(s, now) }
     suspend fun addRest() = mutate { engine, s, _ -> Step(engine.addRest(s, WorkoutEngine.ADD_REST_SECONDS)) }
     suspend fun stepReps(delta: Int) = mutate { engine, s, _ -> Step(engine.adjustReps(s, delta)) }
     suspend fun stepWeight(delta: Int) =
@@ -139,13 +163,14 @@ class WorkoutRepository(
             val state = active.get() ?: return@withTransaction
             // Count any timers that already ran out before ending.
             val resolved = load(state)?.let { live ->
-                val step = WorkoutEngine(live.exercises, live.routine.restBetweenExercisesS).resolve(state, clock.millis())
+                val step = WorkoutEngine(live.exercises, live.routine.restBetweenExercisesS, live.doneCounts).resolve(state, clock.millis())
                 writeSets(state.sessionId, step)
             }
             val session = sessions.getById(state.sessionId)
             if (session != null) {
                 val now = clock.millis()
-                val hasSets = setsDao.getForSession(state.sessionId).isNotEmpty() || resolved == true
+                // Only skipped sets ("Skip set", "End exercise") is nothing done: no session in History.
+                val hasSets = setsDao.getForSession(state.sessionId).any { !it.skipped } || resolved == true
                 sessions.upsert(
                     if (hasSets) session.copy(endedAt = session.endedAt ?: now, updatedAt = now, dirty = true)
                     else session.copy(deleted = true, updatedAt = now, dirty = true)
@@ -163,7 +188,8 @@ class WorkoutRepository(
             val routine = routines.getById(state.routineId) ?: return@withTransaction null
             val exercises = exercisesDao.getForRoutine(state.routineId)
             val now = clock.millis()
-            val engine = WorkoutEngine(exercises, routine.restBetweenExercisesS)
+            val done = WorkoutEngine.doneCounts(setsDao.getForSession(state.sessionId))
+            val engine = WorkoutEngine(exercises, routine.restBetweenExercisesS, done)
             // Always replay ended timers first, so a tap after a missed alarm acts on the real step.
             val resolved = engine.resolve(state, now)
             val changed = change(engine, resolved.state, now)
@@ -171,6 +197,11 @@ class WorkoutRepository(
             if (changed.state.phase == WorkoutPhase.COMPLETE && state.phase != WorkoutPhase.COMPLETE) {
                 sessions.getById(state.sessionId)?.let {
                     sessions.upsert(it.copy(endedAt = changed.state.phaseStartedAt, updatedAt = now, dirty = true))
+                }
+            } else if (state.phase == WorkoutPhase.COMPLETE && changed.state.phase != WorkoutPhase.COMPLETE) {
+                // "One more set" after the workout was done: running again, so not in History yet.
+                sessions.getById(state.sessionId)?.let {
+                    sessions.upsert(it.copy(endedAt = null, updatedAt = now, dirty = true))
                 }
             }
             if (changed.state != state) active.upsert(changed.state)
@@ -188,6 +219,7 @@ class WorkoutRepository(
             WorkoutSetEntity(
                 id = UUID.randomUUID().toString(), updatedAt = now, dirty = true, sessionId = sessionId,
                 exerciseId = it.exerciseId, setNo = it.setNo, reps = it.reps, weight = it.weight, doneAt = it.doneAt,
+                skipped = it.skipped,
             )
         })
         return true

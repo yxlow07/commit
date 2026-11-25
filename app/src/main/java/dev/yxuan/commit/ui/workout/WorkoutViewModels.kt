@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import dev.yxuan.commit.data.db.dao.RoutineSummary
+import dev.yxuan.commit.data.db.dao.SessionSummary
+import dev.yxuan.commit.data.repo.HistoryRepository
 import dev.yxuan.commit.data.db.entity.CommitmentEntity
 import dev.yxuan.commit.data.db.entity.CommitmentType
 import dev.yxuan.commit.data.repo.CommitmentRepository
@@ -79,11 +81,17 @@ class WorkoutsViewModel(
 class RoutineEditorViewModel(
     savedStateHandle: SavedStateHandle,
     private val routines: RoutineRepository,
+    private val history: HistoryRepository,
 ) : ViewModel() {
     val routineId: String = savedStateHandle.toRoute<RoutineEditorRoute>().id
 
     val routine: StateFlow<RoutineEntity?> = state(routines.observe(routineId), null)
     val exercises: StateFlow<List<ExerciseEntity>> = state(routines.observeExercises(routineId), emptyList())
+
+    /** This routine's finished sessions, newest first; null until loaded. */
+    val sessions: StateFlow<List<SessionSummary>?> = state(history.observeRoutineSessions(routineId), null)
+
+    fun deleteSession(id: String) = launch { history.deleteSession(id) }
 
     fun saveRoutine(name: String, restBetweenExercisesS: Int, plannedDays: Int) =
         launch { routines.updateRoutine(routineId, name, restBetweenExercisesS, plannedDays) }
@@ -104,6 +112,10 @@ class LiveWorkoutViewModel(private val workouts: WorkoutRepository) : ViewModel(
 
     fun primary() = launch { workouts.primary() }
     fun skip() = launch { workouts.skip() }
+    fun choose(exerciseIndex: Int) = launch { workouts.choose(exerciseIndex) }
+    fun extraSet() = launch { workouts.extraSet() }
+    fun skipSet() = launch { workouts.skipSet() }
+    fun endExercise() = launch { workouts.endExercise() }
     fun addRest() = launch { workouts.addRest() }
     fun stepReps(delta: Int) = launch { workouts.stepReps(delta) }
     fun stepWeight(delta: Int) = launch { workouts.stepWeight(delta) }

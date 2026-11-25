@@ -14,7 +14,9 @@ import { Button, Dialog, ErrorText, Field, FieldGroup, IconTile, Icons, Segmente
 export function CommitmentDialog({
   open, onClose, commitment, type = "standard", nextSortOrder,
 }: { open: boolean; onClose: () => void; commitment: Commitment | null; type?: CommitmentType; nextSortOrder: number }) {
-  const title = commitment ? (commitment.type === "workout" ? "Edit workout" : "Edit commitment") : type === "workout" ? "New workout commitment" : "New commitment";
+  const title = commitment
+    ? (commitment.type === "workout" ? "Edit workout" : commitment.type === "collection" ? "Edit collection" : "Edit commitment")
+    : type === "workout" ? "New workout commitment" : type === "collection" ? "New collection" : "New commitment";
   return (
     <Dialog open={open} onClose={onClose} title={title}>
       {open && <Form commitment={commitment} initialType={type} nextSortOrder={nextSortOrder} onDone={onClose} />}
@@ -44,7 +46,7 @@ function Form({ commitment, initialType, nextSortOrder, onDone }: { commitment: 
     });
     if (!ok) return;
     onDone();
-    if (createdId) router.push(`/c?id=${createdId}`);
+    if (createdId) router.push(type === "collection" ? `/collection?id=${createdId}` : `/c?id=${createdId}`);
   }
 
   async function archive() {
@@ -59,11 +61,11 @@ function Form({ commitment, initialType, nextSortOrder, onDone }: { commitment: 
     <form className="flex flex-col gap-5" onSubmit={(e) => { e.preventDefault(); save(); }}
       onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save(); } }}>
       <Field label="Name" htmlFor="commitment-name">
-        <TextField id="commitment-name" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={type === "workout" ? "Gym, Running…" : "Study, Work, Home…"} />
+        <TextField id="commitment-name" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={type === "workout" ? "Gym, Running…" : type === "collection" ? "Stamps, Vinyl, Cards…" : "Study, Work, Home…"} />
       </Field>
       {!commitment && (
         <FieldGroup label="Type">
-          <Segmented label="Type" value={type} onChange={setType} items={[{ id: "standard", label: "Todos" }, { id: "workout", label: "Workouts" }]} />
+          <Segmented label="Type" value={type} onChange={setType} items={[{ id: "standard", label: "Todos" }, { id: "workout", label: "Workouts" }, { id: "collection", label: "Collection" }]} />
         </FieldGroup>
       )}
       <FieldGroup label="Colour">
@@ -83,7 +85,7 @@ function Form({ commitment, initialType, nextSortOrder, onDone }: { commitment: 
           ))}
         </div>
       </FieldGroup>
-      {commitment && commitment.type !== "workout" && (
+      {commitment && commitment.type === "standard" && (
         <div className="flex items-center justify-between gap-3">
           <span className="text-body">Show on the widget</span>
           <Switch label="Show on the widget" checked={showInWidget} onChange={setShowInWidget} />
@@ -95,7 +97,7 @@ function Form({ commitment, initialType, nextSortOrder, onDone }: { commitment: 
         <span className="flex-1" />
         <Button variant="quiet" onClick={onDone}>Cancel</Button>
         <Button variant="primary" type="submit" title={online ? undefined : OFFLINE_REASON} disabled={!name.trim() || action.busy || !online}>
-          {commitment ? "Save" : type === "workout" ? "Add workout" : "Add commitment"}
+          {commitment ? "Save" : type === "workout" ? "Add workout" : type === "collection" ? "Add collection" : "Add commitment"}
         </Button>
       </div>
     </form>

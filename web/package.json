@@ -9,7 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "deploy": "next build && wrangler pages deploy out --project-name commit"
+    "deploy": "next build && wrangler pages deploy out --project-name commit --branch main"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.2",

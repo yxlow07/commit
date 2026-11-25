@@ -119,13 +119,26 @@ class WorkoutEngineTest {
     @Test
     fun restButtonSaysNextExerciseAfterTheLastSet() {
         val routine = RoutineEntity(id = "r", updatedAt = 0, commitmentId = "c", name = "Push Day", sortOrder = 0)
-        fun live(st: ActiveWorkoutEntity) = LiveWorkout(st, routine, listOf(bench, plank), emptyList(), t0)
+        // The label comes from the sets logged so far, as stored before the rest begins.
+        val logged = mutableListOf<dev.yxuan.commit.data.db.entity.WorkoutSetEntity>()
+        fun keep(step: Step): ActiveWorkoutEntity {
+            step.logged.forEach {
+                logged += dev.yxuan.commit.data.db.entity.WorkoutSetEntity(
+                    id = "${it.exerciseId}-${it.setNo}", updatedAt = 0, sessionId = "session", exerciseId = it.exerciseId,
+                    setNo = it.setNo, reps = it.reps, weight = it.weight, doneAt = it.doneAt,
+                )
+            }
+            return step.state
+        }
+        fun live(st: ActiveWorkoutEntity) = LiveWorkout(st, routine, listOf(bench, plank), logged.toList(), t0)
         var st = engine.start("session", "r", t0)
-        st = engine.primary(st, s(0)).state // bench set 1 done -> rest
+        st = keep(engine.primary(st, s(0))) // bench set 1 done -> rest
         assertEquals("Next set", live(st).nextLabel)
-        st = engine.primary(engine.skip(st, s(10)).state, s(20)).state // bench set 2 (last) done -> rest
+        assertEquals("bench, set 2", live(st).upNext)
+        st = keep(engine.primary(engine.skip(st, s(10)).state, s(20))) // bench set 2 (last) done -> rest
         assertEquals(REST, st.phase)
         assertEquals("Next exercise", live(st).nextLabel)
+        assertEquals("plank", live(st).upNext)
     }
 
     @Test
@@ -146,5 +159,145 @@ class WorkoutEngineTest {
         assertEquals(COMPLETE, step.state.phase)
         assertEquals(1, step.logged.size)
         assertTrue(WorkoutEngine.volume(step.logged.map { it.reps to it.weight }) == 8 * 60.0)
+    }
+
+    // ---- Choosing another exercise ----
+
+    private val squat = exercise("squat", sets = 1, rest = 45, order = 2)
+    private val three = WorkoutEngine(listOf(bench, plank, squat), restBetweenExercisesS = 120)
+
+    @Test
+    fun chooseJumpsToAnotherExerciseReady() {
+        val st = three.start("session", "r", t0)
+        val jumped = three.choose(st, 2, s(5)).state
+        assertEquals(2, jumped.exerciseIndex)
+        assertEquals(1, jumped.setNo)
+        assertEquals(READY, jumped.phase)
+        // Timed exercises wait for Start when chosen, too.
+        val plankChosen = three.choose(st, 1, s(5)).state
+        assertEquals(READY, plankChosen.phase)
+        assertNull(plankChosen.phaseEndsAt)
+    }
+
+    @Test
+    fun chooseDuringRestKeepsProgressOfTheExerciseLeft() {
+        var st = three.start("session", "r", t0)
+        st = three.primary(st, s(10)).state // bench set 1 logged, resting
+        assertEquals(REST, st.phase)
+        st = three.choose(st, 2, s(20)).state // squat instead
+        assertEquals(2, st.exerciseIndex)
+        val afterSquat = three.primary(st, s(30))
+        assertEquals("squat", afterSquat.logged.single().exerciseId)
+        // Squat is finished, so after the rest the workout returns to bench at set 2, not plank.
+        val next = three.skip(afterSquat.state, s(40)).state
+        assertEquals(0, next.exerciseIndex)
+        assertEquals(2, next.setNo)
+    }
+
+    @Test
+    fun cannotChooseAFinishedExerciseOrSwitchMidHold() {
+        var st = three.start("session", "r", t0)
+        st = three.choose(st, 2, s(1)).state
+        st = three.primary(st, s(2)).state // squat done (1 set)
+        assertEquals(st, three.choose(st, 2, s(3)).state)
+        val work = st.copy(phase = WORK, phaseEndsAt = s(60))
+        assertEquals(work, three.choose(work, 0, s(4)).state)
+    }
+
+    @Test
+    fun completesOnlyWhenEveryExerciseIsDone() {
+        val engine2 = WorkoutEngine(listOf(bench, squat), restBetweenExercisesS = 0, done = mapOf("bench" to 2))
+        // Bench was finished earlier in the session; doing the squat ends the workout.
+        val st = engine2.start("session", "r", t0).copy(exerciseIndex = 1, setNo = 1, reps = 8)
+        assertEquals(COMPLETE, engine2.primary(st, s(5)).state.phase)
+        // With bench not done, finishing squat (the last in order) wraps back to bench instead.
+        val engine3 = WorkoutEngine(listOf(bench, squat), restBetweenExercisesS = 0)
+        val st3 = engine3.choose(engine3.start("session", "r", t0), 1, s(1)).state
+        val after = engine3.primary(st3, s(5)).state
+        assertEquals(READY, after.phase)
+        assertEquals(0, after.exerciseIndex)
+    }
+
+    @Test
+    fun oneMoreSetAfterTheLastSetKeepsValuesThenRestsBetweenExercises() {
+        var st = engine.start("session", "r", t0)
+        st = engine.adjustWeight(st, 5.0)
+        st = engine.primary(st, s(10)).state // bench 1
+        st = engine.skip(st, s(20)).state
+        st = engine.primary(st, s(30)).state // bench 2: last planned set
+        assertEquals(REST, st.phase)
+        assertEquals(s(150), st.phaseEndsAt) // the between-exercises rest
+        val extra = engine.extraSet(st, s(40)).state
+        assertEquals(READY, extra.phase)
+        assertEquals(0, extra.exerciseIndex)
+        assertEquals(3, extra.setNo)
+        assertEquals(65.0, extra.weight, 0.0)
+        val logged = engine.primary(extra, s(50))
+        assertEquals(listOf(LoggedSet("bench", 3, 8, 65.0, s(50))), logged.logged)
+        // Still the longer rest before the plank, and another extra set is still offered.
+        assertEquals(REST, logged.state.phase)
+        assertEquals(s(170), logged.state.phaseEndsAt)
+        assertEquals(4, engine.extraSet(logged.state, s(55)).state.setNo)
+    }
+
+    @Test
+    fun noExtraSetWhileTheExerciseHasPlannedSetsLeftOrMidSet() {
+        val st = engine.start("session", "r", t0)
+        assertEquals(st, engine.extraSet(st, s(1)).state) // READY
+        val resting = engine.primary(st, s(10)).state // bench 1 of 2
+        assertEquals(resting, engine.extraSet(resting, s(11)).state)
+    }
+
+    @Test
+    fun oneMoreSetAfterTheWorkoutIsDone() {
+        val one = WorkoutEngine(listOf(bench), restBetweenExercisesS = 0, done = mapOf("bench" to 1))
+        val st = one.start("session", "r", t0).copy(setNo = 2)
+        val done = one.primary(st, s(5)).state
+        assertEquals(COMPLETE, done.phase)
+        val extra = one.extraSet(done, s(10)).state
+        assertEquals(READY, extra.phase)
+        assertEquals(3, extra.setNo)
+        assertEquals(COMPLETE, one.primary(extra, s(20)).state.phase)
+    }
+
+    @Test
+    fun skipSetRecordsASkippedSetAndGoesStraightToTheNextSet() {
+        var st = engine.start("session", "r", t0)
+        st = engine.adjustWeight(st, 5.0)
+        val step = engine.skipSet(st, s(10))
+        assertEquals(listOf(LoggedSet("bench", 1, 0, 0.0, s(10), skipped = true)), step.logged)
+        assertEquals(READY, step.state.phase) // no rest after a skip
+        assertEquals(0, step.state.exerciseIndex)
+        assertEquals(2, step.state.setNo)
+        assertEquals(65.0, step.state.weight, 0.0) // edits carry
+        // Skipping bench's last set moves to the plank, ready (not auto-started).
+        val next = engine.skipSet(step.state, s(20)).state
+        assertEquals(READY, next.phase)
+        assertEquals(1, next.exerciseIndex)
+        assertEquals(1, next.setNo)
+    }
+
+    @Test
+    fun endExerciseSkipsTheSetsLeftAndStartsTheNextExercise() {
+        var st = engine.start("session", "r", t0)
+        st = engine.primary(st, s(10)).state // bench 1 of 2, now resting
+        val step = engine.endExercise(st, s(20))
+        assertEquals(listOf(LoggedSet("bench", 2, 0, 0.0, s(20), skipped = true)), step.logged)
+        assertEquals(READY, step.state.phase)
+        assertEquals(1, step.state.exerciseIndex)
+        assertNull(step.state.phaseEndsAt)
+        // Ending the last exercise finishes the workout.
+        val end = engine.endExercise(step.state, s(30))
+        assertEquals(2, end.logged.size)
+        assertEquals(COMPLETE, end.state.phase)
+    }
+
+    @Test
+    fun skippedSetsCountAsDealtWithButNotAsDone() {
+        val sets = listOf(
+            dev.yxuan.commit.data.db.entity.WorkoutSetEntity(id = "a", updatedAt = 0, sessionId = "x", exerciseId = "bench", setNo = 1, reps = 8, weight = 60.0, doneAt = 0),
+            dev.yxuan.commit.data.db.entity.WorkoutSetEntity(id = "b", updatedAt = 0, sessionId = "x", exerciseId = "bench", setNo = 2, reps = 0, weight = 0.0, doneAt = 0, skipped = true),
+        )
+        assertEquals(mapOf("bench" to 2), WorkoutEngine.doneCounts(sets))
     }
 }

@@ -30,6 +30,8 @@ class CommitmentRepository(
                 type = type,
                 color = color,
                 sortOrder = dao.maxSortOrder() + 1,
+                // Collections are standalone trackers: never a widget tab.
+                showInWidget = type != CommitmentType.COLLECTION,
             )
         )
         listener.onDataChanged()

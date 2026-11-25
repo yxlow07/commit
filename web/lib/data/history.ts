@@ -31,7 +31,8 @@ export interface SessionSummary {
 export function sessionSummaries(sessions: WorkoutSession[], sets: WorkoutSet[], routines: Routine[]): SessionSummary[] {
   const routineName = new Map(routines.map((r) => [r.id, r.name]));
   const bySession = new Map<string, WorkoutSet[]>();
-  for (const s of sets) bySession.set(s.session_id, [...(bySession.get(s.session_id) ?? []), s]);
+  // Skipped sets (app's "Skip set" / "End exercise") only mark a set as passed over: not counted.
+  for (const s of sets) if (!s.skipped) bySession.set(s.session_id, [...(bySession.get(s.session_id) ?? []), s]);
   return sessions
     .filter((s) => s.ended_at != null)
     .map((s) => {

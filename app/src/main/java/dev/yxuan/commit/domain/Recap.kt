@@ -10,11 +10,29 @@ import dev.yxuan.commit.ui.format.WorkoutFormat
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.util.Locale
 
 enum class RecapKind { MORNING, NIGHT }
 
-data class RecapSection(val title: String, val lines: List<String>)
+/**
+ * One recap row, drawn like a todo row: [status] in the left column ("Late", "14:00", "Thu"), the
+ * [title], and a [detail] line tinted toward [color] (the commitment's). [late] colours the status
+ * red. [text] is the plain one-line form used by the notification ("Quiz, 14:00").
+ */
+data class RecapLine(
+    val status: String,
+    val title: String,
+    val detail: String? = null,
+    val late: Boolean = false,
+    val color: Int? = null,
+    val text: String = listOfNotNull(title, detail).joinToString(", "),
+)
+
+data class RecapSection(val title: String, val items: List<RecapLine>) {
+    val lines: List<String> get() = items.map { it.text }
+}
 
 /**
  * A daily recap (F6). [title] is the notification title ("4 things today, 1 overdue"); [summary] the
@@ -27,7 +45,7 @@ data class Recap(
     val sections: List<RecapSection>,
     val body: String = summary,
 ) {
-    val isEmpty: Boolean get() = sections.all { it.lines.isEmpty() }
+    val isEmpty: Boolean get() = sections.all { it.items.isEmpty() }
     val lines: List<String> get() = sections.flatMap { s -> s.lines }
 }
 
@@ -37,17 +55,19 @@ data class RecapInput(
     val openTodos: List<TodoEntity>,
     val commitments: List<CommitmentEntity>,
     val routines: List<RoutineEntity>,
-    /** Completions done today. */
+    /** Completions done today (or on the day being reviewed). */
     val completedToday: List<CompletionRow>,
-    /** Workout sessions that ended today. */
+    /** Workout sessions that ended today (or on the day being reviewed). */
     val sessionsToday: List<SessionSummary>,
 )
 
 /**
- * Builds the morning (F6.1) and night (F6.2) recaps. Pure: no Android, no database, so the
- * same code backs the notification, the recap screen and the unit tests.
+ * Builds the morning (F6.1) and night (F6.2) recaps, and the review of a past day. Pure: no
+ * Android, no database, so the same code backs the notification, the recap screen and the tests.
  */
 class RecapBuilder(private val clock: Clock, private val locale: Locale = Locale.getDefault()) {
+
+    private val timeFormat = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(locale)
 
     fun build(kind: RecapKind, input: RecapInput): Recap = when (kind) {
         RecapKind.MORNING -> morning(input)
@@ -63,13 +83,16 @@ class RecapBuilder(private val clock: Clock, private val locale: Locale = Locale
         val chores = dueToday.filter { it.isRecurring }
         val planned = input.routines.filter { Weekdays.isPlanned(it.plannedDays, today) }
 
-        // One line per item: title, then the due label (a time, "Late") or the commitment.
         val sections = listOf(
-            RecapSection("Overdue", overdue.map { "${it.todo.title}, Late" }),
-            RecapSection("Due today", todos.map { line(it, input) }),
-            RecapSection("Chores", chores.map { "${it.todo.title}, ${commitmentName(it, input) ?: "chore"}" }),
-            RecapSection("Workout", planned.map { "${it.name}, workout" }),
-        ).filter { it.lines.isNotEmpty() }
+            RecapSection("Overdue", overdue.map { openLine(it, input).copy(text = "${it.todo.title}, Late") }),
+            RecapSection("Due today", todos.map { openLine(it, input) }),
+            RecapSection("Chores", chores.map { chore(it, input) }),
+            RecapSection("Workout", planned.map { r ->
+                RecapLine("Today", r.name, commitment(r.commitmentId, input)?.name ?: "Workout", color = commitment(r.commitmentId, input)?.color, text = "${r.name}, workout")
+            }),
+            // Viewed later in the day, the morning recap also shows what's already done.
+            RecapSection("Done today", doneLines(input) + workoutLines(input)),
+        ).filter { it.items.isNotEmpty() }
 
         val things = todos.size + chores.size + planned.size
         val title = when {
@@ -87,24 +110,15 @@ class RecapBuilder(private val clock: Clock, private val locale: Locale = Locale
         val items = openItems(input)
         val stillOpen = items.filter { isLate(it) || it.dueAt?.toLocalDate() == today }
         val dueTomorrow = items.filter { !isLate(it) && it.dueAt?.toLocalDate() == tomorrow }
-
-        // Completed today, grouped by commitment in commitment order (F6.2).
-        val order = input.commitments.withIndex().associate { (i, c) -> c.id to i }
-        val done = input.completedToday
-            .sortedWith(compareBy<CompletionRow> { order[it.commitmentId] ?: Int.MAX_VALUE }.thenBy { it.doneAt })
-            .map { "${it.title}, ${it.commitmentName}" }
-
-        val workouts = input.sessionsToday.map { s ->
-            val minutes = maxOf(1, ((s.session.endedAt ?: s.session.startedAt) - s.session.startedAt) / 60_000)
-            Triple(s.routineName, minutes, WorkoutFormat.volume(s.volume))
-        }
+        val done = doneLines(input)
+        val workouts = workoutLines(input)
 
         val sections = listOf(
             RecapSection("Done today", done),
-            RecapSection("Workout", workouts.map { (name, min, vol) -> "$name, $min min, $vol" }),
-            RecapSection("Still open", stillOpen.map { line(it, input) }),
-            RecapSection("Due tomorrow", dueTomorrow.map { line(it, input) }),
-        ).filter { it.lines.isNotEmpty() }
+            RecapSection("Workout", workouts),
+            RecapSection("Still open", stillOpen.map { openLine(it, input) }),
+            RecapSection("Due tomorrow", dueTomorrow.map { openLine(it, input) }),
+        ).filter { it.items.isNotEmpty() }
 
         val title = when {
             done.isEmpty() && stillOpen.isEmpty() -> if (workouts.isNotEmpty()) "Workout done today" else "Nothing to report"
@@ -116,25 +130,90 @@ class RecapBuilder(private val clock: Clock, private val locale: Locale = Locale
         val body = listOfNotNull(
             stillOpen.takeIf { it.isNotEmpty() }?.let { "Still open: ${listSentence(it.map { i -> i.todo.title })}." },
             dueTomorrow.takeIf { it.isNotEmpty() }?.let { "Due tomorrow: ${listSentence(it.map { i -> i.todo.title })}." },
-            workouts.firstOrNull()?.let { (name, min, vol) -> "$name took $min min, $vol." },
+            input.sessionsToday.firstOrNull()?.let { s -> "${s.routineName} took ${minutes(s)} min, ${WorkoutFormat.volume(s.volume)}." },
         ).joinToString(" ").ifEmpty { if (done.isNotEmpty()) "Everything due today is done." else "" }
 
         return Recap(RecapKind.NIGHT, title, body, sections, body)
     }
 
-    private fun openItems(input: RecapInput): List<TodoItem> =
-        TodoItem.open(input.openTodos, clock)
+    /**
+     * Looking back at [day] (from the History grid): what got done, the workouts, and what was due
+     * that day and is still not done. Today is the night recap; the future has nothing to show.
+     * [input] holds that day's completions and sessions.
+     */
+    fun day(day: LocalDate, input: RecapInput): Recap {
+        val today = LocalDate.now(clock)
+        if (!day.isBefore(today)) return night(input)
+        val done = doneLines(input)
+        val workouts = workoutLines(input)
+        val missed = openItems(input).filter { !it.isRecurring && it.dueAt?.toLocalDate() == day }
+        val sections = listOf(
+            RecapSection("Done", done),
+            RecapSection("Workout", workouts),
+            RecapSection("Was due, still open", missed.map { openLine(it, input) }),
+        ).filter { it.items.isNotEmpty() }
+        val title = listOfNotNull(
+            "${done.size} done".takeIf { done.isNotEmpty() },
+            count(workouts.size, "workout").takeIf { workouts.isNotEmpty() },
+            "${missed.size} missed".takeIf { missed.isNotEmpty() },
+        ).joinToString(", ").ifEmpty { "Nothing done that day" }
+        return Recap(RecapKind.NIGHT, title, title, sections)
+    }
+
+    // ---- lines ----
+
+    /** Completions in commitment order: done time on the left ("Late" in red when finished after the due time). */
+    private fun doneLines(input: RecapInput): List<RecapLine> {
+        val order = input.commitments.withIndex().associate { (i, c) -> c.id to i }
+        return input.completedToday
+            .sortedWith(compareBy<CompletionRow> { order[it.commitmentId] ?: Int.MAX_VALUE }.thenBy { it.doneAt })
+            .map { row ->
+                val timeliness = if (row.isRecurring) "On time" else DueLabels.timeliness(row.dueAt, row.hasTime, row.doneAt, clock)
+                val late = timeliness != "On time" && timeliness != "No due date"
+                RecapLine(
+                    status = if (late) "Late" else time(row.doneAt),
+                    title = row.title,
+                    detail = listOfNotNull(row.commitmentName, timeliness.takeIf { late && it != "Late" }).joinToString(", "),
+                    late = late,
+                    color = row.commitmentColor,
+                    text = "${row.title}, ${row.commitmentName}",
+                )
+            }
+    }
+
+    /** Sessions: start time on the left, then "42 min, 3,450 kg". */
+    private fun workoutLines(input: RecapInput): List<RecapLine> = input.sessionsToday.map { s ->
+        val detail = "${minutes(s)} min, ${WorkoutFormat.volume(s.volume)}"
+        val color = input.routines.firstOrNull { it.id == s.session.routineId }?.let { commitment(it.commitmentId, input)?.color }
+        RecapLine(time(s.session.startedAt), s.routineName, detail, color = color, text = "${s.routineName}, $detail")
+    }
+
+    /** An open todo: its due label on the left (red when late), the commitment underneath. */
+    private fun openLine(item: TodoItem, input: RecapInput): RecapLine {
+        val due = DueLabels.open(item.dueAt, item.hasTime, clock, locale)
+        val c = commitment(item.todo.commitmentId, input)
+        val detail = listOfNotNull(c?.name, if (item.isRecurring) Recurrence.label(item.todo) else null).joinToString(", ").ifEmpty { null }
+        return RecapLine(due.text.ifEmpty { "No date" }, item.todo.title, detail, late = due.late, color = c?.color, text = textLine(item, input))
+    }
+
+    private fun chore(item: TodoItem, input: RecapInput): RecapLine =
+        openLine(item, input).copy(text = "${item.todo.title}, ${commitment(item.todo.commitmentId, input)?.name ?: "chore"}")
+
+    private fun openItems(input: RecapInput): List<TodoItem> = TodoItem.open(input.openTodos, clock)
 
     private fun isLate(item: TodoItem) = DueLabels.isLate(item.dueAt, item.hasTime, clock)
 
-    private fun commitmentName(item: TodoItem, input: RecapInput) =
-        input.commitments.firstOrNull { it.id == item.todo.commitmentId }?.name
+    private fun commitment(id: String, input: RecapInput) = input.commitments.firstOrNull { it.id == id }
+
+    private fun minutes(s: SessionSummary) = maxOf(1, ((s.session.endedAt ?: s.session.startedAt) - s.session.startedAt) / 60_000)
+
+    private fun time(millis: Long): String = Instant.ofEpochMilli(millis).atZone(clock.zone).toLocalTime().format(timeFormat)
 
     /** "Quiz, 14:00", or "Read, Study" when the label would only say "Today". */
-    private fun line(item: TodoItem, input: RecapInput): String {
+    private fun textLine(item: TodoItem, input: RecapInput): String {
         val label = DueLabels.open(item.dueAt, item.hasTime, clock, locale).text
         val right = when (label) {
-            "", "Today" -> commitmentName(item, input)
+            "", "Today" -> commitment(item.todo.commitmentId, input)?.name
             else -> label
         }
         return listOfNotNull(item.todo.title, right).joinToString(", ")

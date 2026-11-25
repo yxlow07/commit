@@ -6,9 +6,10 @@ import dev.yxuan.commit.ui.components.reorderLift
 import dev.yxuan.commit.ui.components.ReorderHandle
 import dev.yxuan.commit.ui.components.rememberReorderState
 import dev.yxuan.commit.ui.workout.workoutSections
-import dev.yxuan.commit.ui.workout.workoutInProgress
 import dev.yxuan.commit.ui.workout.rememberWorkoutSections
 import dev.yxuan.commit.ui.components.SectionHeading
+import dev.yxuan.commit.ui.components.TodoRow
+import androidx.compose.foundation.lazy.LazyListScope
 import dev.yxuan.commit.ui.components.GlyphIcon
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Box
@@ -96,31 +97,47 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
 
-/** One commitment row on Today. [count] is null for workout commitments. */
-data class TodayRow(val commitment: CommitmentEntity, val detail: String, val count: Int?)
+/**
+ * One commitment row on the Groups tab. [count] is the open todos (null for workouts and
+ * collections); [trailing] is the large right-hand text: the count, or "34/50" for a collection.
+ */
+data class TodayRow(val commitment: CommitmentEntity, val detail: String, val count: Int?, val trailing: String? = count?.toString())
 
-data class TodayState(val summary: String, val rows: List<TodayRow>, val loaded: Boolean)
+/** One open todo in the time view, with the commitment it belongs to. */
+data class AgendaRow(val item: TodoItem, val commitment: CommitmentEntity)
+
+data class TodayState(val summary: String, val rows: List<TodayRow>, val loaded: Boolean, val agenda: List<AgendaRow> = emptyList())
 
 class TodayViewModel(
     private val commitments: CommitmentRepository,
-    todos: TodoRepository,
+    private val todoRepository: TodoRepository,
     routines: RoutineRepository,
+    collections: dev.yxuan.commit.data.repo.CollectionRepository,
     private val clock: Clock,
 ) : ViewModel() {
     val state: StateFlow<TodayState> = combine(
-        commitments.observeActive(), todos.observeOpenAll(), routines.observeSummaries(),
-    ) { list, open, routineList -> build(list, open, routineList) }
+        commitments.observeActive(), todoRepository.observeOpenAll(), routines.observeSummaries(), collections.observeProgress(),
+    ) { list, open, routineList, progress -> build(list, open, routineList, progress.associateBy { it.commitmentId }) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TodayState("", emptyList(), loaded = false))
 
     fun reorder(ids: List<String>) {
         viewModelScope.launch { commitments.reorder(ids) }
     }
 
+    fun setDone(todoId: String, done: Boolean) {
+        viewModelScope.launch { todoRepository.setDone(todoId, done) }
+    }
+
     fun create(name: String, type: CommitmentType, color: Int) {
         viewModelScope.launch { commitments.create(name, type, color) }
     }
 
-    private fun build(list: List<CommitmentEntity>, open: List<TodoEntity>, routineList: List<RoutineSummary>): TodayState {
+    private fun build(
+        list: List<CommitmentEntity>,
+        open: List<TodoEntity>,
+        routineList: List<RoutineSummary>,
+        progress: Map<String, dev.yxuan.commit.data.db.dao.CollectionProgress>,
+    ): TodayState {
         val today = LocalDate.now(clock)
         val items = open.map { TodoItem.of(it, clock) }.filter { !it.isDone }
         val byCommitment = items.groupBy { it.todo.commitmentId }
@@ -139,15 +156,31 @@ class TodayViewModel(
         }
 
         val rows = list.map { c ->
-            if (c.type == CommitmentType.WORKOUT) {
-                val mine = routineList.filter { it.routine.commitmentId == c.id }
-                TodayRow(c, workoutDetail(mine, today), null)
-            } else {
-                val mine = byCommitment[c.id].orEmpty()
-                TodayRow(c, todoDetail(mine, today), mine.size)
+            when (c.type) {
+                CommitmentType.WORKOUT -> {
+                    val mine = routineList.filter { it.routine.commitmentId == c.id }
+                    TodayRow(c, workoutDetail(mine, today), null)
+                }
+                CommitmentType.COLLECTION -> {
+                    val p = progress[c.id]
+                    val detail = when {
+                        p == null || p.total == 0 -> "Nothing in it yet"
+                        p.collected == p.total -> "All ${p.total} collected"
+                        else -> "${p.total - p.collected} still to find"
+                    }
+                    TodayRow(c, detail, null, trailing = p?.let { "${it.collected}/${it.total}" })
+                }
+                CommitmentType.STANDARD -> {
+                    val mine = byCommitment[c.id].orEmpty()
+                    TodayRow(c, todoDetail(mine, today), mine.size)
+                }
             }
         }
-        return TodayState(sentence, rows, loaded = true)
+        val byId = list.associateBy { it.id }
+        val agenda = items.sortedWith(TodoItem.ORDER).mapNotNull { i ->
+            byId[i.todo.commitmentId]?.takeIf { it.type == CommitmentType.STANDARD }?.let { AgendaRow(i, it) }
+        }
+        return TodayState(sentence, rows, loaded = true, agenda = agenda)
     }
 
     private fun day(millis: Long) = Instant.ofEpochMilli(millis).atZone(clock.zone).toLocalDate()
@@ -191,6 +224,7 @@ class TodayViewModel(
 @Composable
 fun TodayScreen(
     onOpenCommitment: (String) -> Unit,
+    onOpenCollection: (String) -> Unit,
     onOpenRoutine: (String) -> Unit,
     onOpenLive: () -> Unit,
     modifier: Modifier = Modifier,
@@ -202,6 +236,7 @@ fun TodayScreen(
     val c = Commit.colors
     val t = Commit.type
     var creating by remember { mutableStateOf(startCreating) }
+    var creatingType by remember { mutableStateOf(CommitmentType.STANDARD) }
     val today = LocalDate.now()
 
     // Commitments and routines reorder by dragging their grip, or holding the row.
@@ -242,15 +277,15 @@ fun TodayScreen(
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(Space.l)) {
                     Text("Add your first commitment", style = t.bodyL, color = c.textStrong)
-                    PrimaryButton("New commitment", onClick = { creating = true })
+                    PrimaryButton("New commitment", onClick = { creatingType = CommitmentType.STANDARD; creating = true })
                 }
             }
         }
 
         // Todo commitments first, then workout commitments under their own heading. Each group is
         // reordered on its own: drag by the handle, or hold anywhere on the row.
-        val todoRows = shownRows.filter { it.commitment.type != CommitmentType.WORKOUT }
-        workoutInProgress(workouts, onOpenLive)
+        val todoRows = shownRows.filter { it.commitment.type == CommitmentType.STANDARD }
+        val collectionRows = shownRows.filter { it.commitment.type == CommitmentType.COLLECTION }
 
         fun group(rows: List<TodayRow>) {
             val groupIds = rows.map { it.commitment.id }
@@ -263,11 +298,14 @@ fun TodayScreen(
                     detailColor = lerp(c.muted, accent, 0.35f),
                     title = row.commitment.name,
                     detail = row.detail,
-                    trailing = row.count?.toString(),
+                    trailing = row.trailing,
                     titleStyle = t.titleDialog.copy(fontWeight = FontWeight.Medium),
                     trailingStyle = t.tabSelected.tnum(),
                     minHeight = 64.dp,
-                    onClick = { onOpenCommitment(row.commitment.id) },
+                    onClick = {
+                        if (row.commitment.type == CommitmentType.COLLECTION) onOpenCollection(row.commitment.id)
+                        else onOpenCommitment(row.commitment.id)
+                    },
                     modifier = Modifier
                         .then(if (reorder.dragging == id) Modifier else Modifier.animateItem())
                         .reorderLift(reorder, id)
@@ -280,19 +318,82 @@ fun TodayScreen(
 
         if (state.rows.isNotEmpty()) {
             item(key = "commitments-header") {
-                SectionHeader("Commitments", Glyph.Plus, "New commitment", onAction = { creating = true })
+                SectionHeader("Commitments", Glyph.Plus, "New commitment", onAction = { creatingType = CommitmentType.STANDARD; creating = true })
             }
             group(todoRows)
         }
         workoutSections(workouts, onOpenRoutine, onOpenLive, topGap = state.rows.isNotEmpty())
+        // Collections: standalone trackers, each with how much of it is collected.
+        if (collectionRows.isNotEmpty()) {
+            item(key = "collections-header") {
+                SectionHeader("Collections", Glyph.Plus, "New collection", onAction = { creatingType = CommitmentType.COLLECTION; creating = true }, modifier = Modifier.padding(top = Space.xxl))
+            }
+            group(collectionRows)
+        }
     }
 
     if (creating) {
         CommitmentDialog(
             initial = null,
+            initialType = creatingType,
             onDismiss = { creating = false },
             onSave = { name, type, color, _ -> viewModel.create(name, type, color); creating = false },
         )
+    }
+}
+
+/**
+ * The Agenda: every open todo across commitments in due order, under Overdue, Today, Tomorrow,
+ * This week, Later and No date (empty sections hidden). Rows are the shared todo row; the second
+ * line names the commitment, tinted toward its colour.
+ */
+internal fun LazyListScope.timeSections(rows: List<AgendaRow>, onEdit: (String) -> Unit, onToggle: (String, Boolean) -> Unit) {
+    val clock = Clock.systemDefaultZone()
+    val today = LocalDate.now(clock)
+    fun day(m: Long) = Instant.ofEpochMilli(m).atZone(clock.zone).toLocalDate()
+    val sections = linkedMapOf<String, MutableList<AgendaRow>>()
+    for (r in rows) {
+        val d = r.item.dueAt
+        val title = when {
+            d == null -> "No date"
+            DueLabels.isLate(d, r.item.hasTime, clock) -> "Overdue"
+            else -> when (ChronoUnit.DAYS.between(today, day(d))) {
+                0L -> "Today"
+                1L -> "Tomorrow"
+                in 2..6 -> "This week"
+                else -> "Later"
+            }
+        }
+        sections.getOrPut(title) { mutableListOf() } += r
+    }
+    if (rows.isEmpty()) {
+        item(key = "time-empty") {
+            Text("Nothing open.", style = Commit.type.bodyL, color = Commit.colors.textStrong)
+        }
+        return
+    }
+    for (title in listOf("Overdue", "Today", "Tomorrow", "This week", "Later", "No date")) {
+        val list = sections[title] ?: continue
+        item(key = "time-$title") {
+            SectionHeading(title, Modifier.padding(top = Space.l, bottom = Space.xs), danger = title == "Overdue")
+        }
+        items(list, key = { "time-" + it.item.todo.id }) { r ->
+            val i = r.item
+            val second = listOfNotNull(
+                r.commitment.name,
+                if (i.isRecurring) dev.yxuan.commit.domain.Recurrence.label(i.todo) else null,
+            ).joinToString(", ")
+            TodoRow(
+                due = DueLabels.open(i.dueAt, i.hasTime, clock),
+                title = i.todo.title,
+                checked = false,
+                onCheckedChange = { onToggle(i.todo.id, it) },
+                onClick = { onEdit(i.todo.id) },
+                secondLine = second,
+                secondLineColor = lerp(Commit.colors.muted, Color(r.commitment.color), 0.35f),
+                modifier = Modifier.animateItem(),
+            )
+        }
     }
 }
 

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCommitments } from "./Nav";
 import { usePanel } from "./EditPanel";
 import { ADD_EVENT } from "./Todos";
 import { Button, Dialog } from "./ui";
@@ -14,7 +15,7 @@ const SHORTCUTS: [string, string][] = [
   ["Delete", "Delete the focused todo"],
   ["Esc", "Close the panel, dialog or popover"],
   ["Ctrl / Cmd + Enter", "Save in the panel or a dialog"],
-  ["G then T, H or S", "Go to Today, History or Settings"],
+  ["G then G, A, H or S", "Go to Groups, Agenda, History or Settings"],
   ["[ and ]", "Previous and next commitment"],
   ["?", "Show these shortcuts"],
 ];
@@ -29,6 +30,10 @@ const typing = (el: EventTarget | null) =>
 export function Shortcuts() {
   const router = useRouter();
   const panel = usePanel();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const commitments = useCommitments();
+  const currentId = pathname.startsWith("/c") ? params.get("id") : null;
   const [help, setHelp] = useState(false);
   const goPending = useRef(0);
 
@@ -40,7 +45,7 @@ export function Shortcuts() {
 
       if (Date.now() - goPending.current < 1500) {
         goPending.current = 0;
-        const to = { t: "/", h: "/history", s: "/settings" }[k.toLowerCase()];
+        const to = { g: "/", a: "/agenda", h: "/history", s: "/settings" }[k.toLowerCase()];
         if (to) { e.preventDefault(); router.push(to); return; }
       }
       if (k === "?") { e.preventDefault(); setHelp(true); }
@@ -50,12 +55,11 @@ export function Shortcuts() {
         if (document.querySelector("[data-inline-add]")) window.dispatchEvent(new Event(ADD_EVENT));
         else panel.openNew();
       } else if (k === "[" || k === "]") {
-        const links = [...document.querySelectorAll<HTMLAnchorElement>("[data-commitment-link]")];
-        if (!links.length) return;
-        const i = links.findIndex((a) => a.getAttribute("aria-current") === "page");
-        const next = links[i < 0 ? 0 : (i + (k === "]" ? 1 : -1) + links.length) % links.length];
+        if (!commitments.length) return;
+        const i = commitments.findIndex((c) => c.id === currentId);
+        const next = commitments[i < 0 ? 0 : (i + (k === "]" ? 1 : -1) + commitments.length) % commitments.length];
         e.preventDefault();
-        router.push(next.getAttribute("href")!);
+        router.push(`/c?id=${next.id}`);
       } else if ((k === "ArrowDown" || k === "j") && !document.activeElement?.closest("[data-todo-row], [role=tablist], [role=grid], [role=radiogroup]")) {
         const first = document.querySelector<HTMLElement>("[data-todo-row]");
         if (first && (document.activeElement === document.body || document.activeElement == null)) { e.preventDefault(); first.focus(); }
@@ -63,7 +67,7 @@ export function Shortcuts() {
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [router, panel]);
+  }, [router, panel, commitments, currentId]);
 
   return (
     <Dialog open={help} onClose={() => setHelp(false)} title="Keyboard shortcuts">

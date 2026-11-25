@@ -178,6 +178,7 @@ fun TodoRow(
     modifier: Modifier = Modifier,
     secondLine: String? = null,
     minHeight: Dp = Space.rowApp,
+    secondLineColor: Color? = null,
 ) {
     val c = Commit.colors
     val t = Commit.type
@@ -203,7 +204,7 @@ fun TodoRow(
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (!secondLine.isNullOrEmpty()) {
-                    Text(secondLine, style = t.meta, color = c.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(secondLine, style = t.meta, color = secondLineColor ?: c.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -686,9 +687,9 @@ fun NavRow(
 
 // ---- Bottom navigation ----
 
-enum class NavTab(val label: String) { Today("Today"), History("History"), Settings("Settings") }
+enum class NavTab(val label: String) { Commitments("Groups"), Agenda("Agenda"), History("History"), Settings("Settings") }
 
-/** 72 dp, `surface`, three text items; selected Bold `ink`, others Regular `muted`. No icons. */
+/** 72 dp, `surface`, one text item per tab; selected Bold `ink`, others Regular `muted`. No icons. */
 @Composable
 fun BottomNav(selected: NavTab, onSelect: (NavTab) -> Unit, modifier: Modifier = Modifier) {
     val c = Commit.colors

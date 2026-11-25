@@ -20,6 +20,9 @@ class HistoryRepository(
 
     fun observeSession(id: String): Flow<SessionSummary?> = db.workoutSessionDao().observeSummary(id)
 
+    fun observeRoutineSessions(routineId: String): Flow<List<SessionSummary>> =
+        db.workoutSessionDao().observeFinishedForRoutine(routineId)
+
     fun observeSessionSets(sessionId: String): Flow<List<SetRow>> = db.workoutSetDao().observeRowsForSession(sessionId)
 
     fun observeExercisePoints(): Flow<List<ExerciseSessionPoint>> = db.workoutSetDao().observeExercisePoints()
@@ -30,6 +33,18 @@ class HistoryRepository(
         db.workoutSetDao().upsert(
             set.copy(reps = reps.coerceAtLeast(0), weight = weight.coerceAtLeast(0.0), updatedAt = clock.millis(), dirty = true)
         )
+        listener.onDataChanged()
+    }
+
+    /**
+     * Deletes a logged session and its sets. Soft deletes (deleted + dirty), so the next sync removes
+     * them from the server and the web too; they drop out of History, recaps and progress at once.
+     */
+    suspend fun deleteSession(id: String) {
+        val session = db.workoutSessionDao().getById(id) ?: return
+        val now = clock.millis()
+        db.workoutSetDao().softDeleteForSession(id, now)
+        db.workoutSessionDao().upsert(session.copy(deleted = true, updatedAt = now, dirty = true))
         listener.onDataChanged()
     }
 

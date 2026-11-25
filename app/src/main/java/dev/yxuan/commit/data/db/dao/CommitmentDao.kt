@@ -21,7 +21,7 @@ interface CommitmentDao {
 
     /** Commitments that appear as widget tabs (F3.1, F1.3). */
     @Query(
-        "SELECT * FROM commitments WHERE deleted = 0 AND archived = 0 AND show_in_widget = 1 " +
+        "SELECT * FROM commitments WHERE deleted = 0 AND archived = 0 AND show_in_widget = 1 AND type != 'collection' " +
             "ORDER BY sort_order, name"
     )
     fun observeWidgetTabs(): Flow<List<CommitmentEntity>>

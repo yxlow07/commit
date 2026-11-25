@@ -2,6 +2,7 @@ package dev.yxuan.commit.widget
 
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.glance.color.ColorProvider
 import androidx.glance.text.FontFamily
 import androidx.glance.unit.ColorProvider
@@ -36,7 +37,14 @@ data class WidgetColors(
      * through the see-through panel; the solid `track` grey matched the panel over light wallpaper.
      */
     val tabDash: ColorProvider,
+    /** Raw `muted` for day and night, so [toward] can mix it with a commitment's colour. */
+    private val mutedDay: Color = Color.Gray,
+    private val mutedNight: Color = Color.Gray,
 ) {
+    /** `muted` moved 35 % toward [color], like the Agenda page's commitment line. */
+    fun toward(color: Int): ColorProvider =
+        ColorProvider(day = lerp(mutedDay, Color(color), 0.35f), night = lerp(mutedNight, Color(color), 0.35f))
+
     companion object {
         fun of(theme: ActiveTheme): WidgetColors {
             val (day, night) = when (theme.mode) {
@@ -52,6 +60,7 @@ data class WidgetColors(
                 tabIdle = p { it.faint },
                 panel = ColorProvider(day = Color(day.surface).copy(alpha = 0.72f), night = Color(night.surface).copy(alpha = 0.72f)),
                 tabDash = ColorProvider(day = Color(day.ink).copy(alpha = 0.22f), night = Color(night.ink).copy(alpha = 0.3f)),
+                mutedDay = Color(day.muted), mutedNight = Color(night.muted),
             )
         }
 

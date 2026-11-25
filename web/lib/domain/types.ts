@@ -13,7 +13,8 @@ interface Synced {
   deleted: Flag;
 }
 
-export type CommitmentType = "standard" | "workout";
+/** standard = todos, workout = routines, collection = a standalone collection tracker. */
+export type CommitmentType = "standard" | "workout" | "collection";
 
 export interface Commitment extends Synced {
   name: string;
@@ -85,6 +86,27 @@ export interface WorkoutSet extends Synced {
   skipped: Flag;
 }
 
+/** How a collection group orders its items. */
+export type CollectionSort = "manual" | "name" | "missing_first" | "collected_first" | "newest";
+
+/** A group inside a collection commitment (e.g. "1990s" in "Stamps"). */
+export interface CollectionGroup extends Synced {
+  commitment_id: string;
+  name: string;
+  sort_order: number;
+  sort_mode: CollectionSort;
+}
+
+/** An item: a name, a photo (Storage key in the private `collection-photos` bucket), or both. */
+export interface CollectionItem extends Synced {
+  group_id: string;
+  name: string | null;
+  photo_path: string | null;
+  collected: Flag;
+  sort_order: number;
+  created_at: number;
+}
+
 export interface Settings extends Synced {
   morning_recap_time: number;
   night_recap_time: number;
@@ -106,6 +128,8 @@ export interface Tables {
   exercises: Exercise;
   workout_sessions: WorkoutSession;
   workout_sets: WorkoutSet;
+  collection_groups: CollectionGroup;
+  collection_items: CollectionItem;
   settings: Settings;
   themes: Theme;
 }
@@ -113,5 +137,6 @@ export interface Tables {
 export type TableName = keyof Tables;
 
 export const TABLES: TableName[] = [
-  "commitments", "todos", "completions", "routines", "exercises", "workout_sessions", "workout_sets", "settings", "themes",
+  "commitments", "todos", "completions", "routines", "exercises", "workout_sessions", "workout_sets",
+  "collection_groups", "collection_items", "settings", "themes",
 ];

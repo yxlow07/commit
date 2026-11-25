@@ -4,7 +4,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode 
 import { addDays, startOfDay, startOfWeek } from "@/lib/domain/dates";
 import { REPEAT_UNITS, minutesLabel, parseTime, shortDate, splitInterval, type RepeatUnit } from "@/lib/domain/labels";
 import { weekdaysLabel } from "@/lib/domain/recurrence";
-import { Icons, Segmented, WeekdayToggles, fieldClass } from "./ui";
+import { Icons, Segmented, Switch, WeekdayToggles, fieldClass } from "./ui";
 
 /** Closes a popover on a click outside [ref]. */
 function useOutside(ref: React.RefObject<HTMLElement | null>, open: boolean, close: () => void) {
@@ -244,11 +244,11 @@ export function RepeatField({ value, onChange }: { value: RepeatValue; onChange:
 
   return (
     <div className="flex flex-col gap-3">
-      <label className="flex min-h-11 cursor-pointer items-center gap-3 text-body">
-        <input type="checkbox" checked={value.on} onChange={(e) => onChange({ ...value, on: e.target.checked })}
-          className="size-5 shrink-0 cursor-pointer accent-[var(--ink)]" />
-        <span>{summary}</span>
-      </label>
+      {/* A switch row, as in the app: the summary on the left says what repeating means. */}
+      <div className="flex min-h-12 items-center gap-3">
+        <span className="min-w-0 flex-1 text-body-l">{summary}</span>
+        <Switch label="Repeat" checked={value.on} onChange={(on) => onChange({ ...value, on })} />
+      </div>
       {value.on && (
         <>
           <Segmented

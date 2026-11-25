@@ -106,6 +106,8 @@ dependencies {
 
     implementation(libs.androidx.glance.appwidget)
     implementation(libs.androidx.glance.material3)
+    // Collection photos (local files).
+    implementation(libs.coil.compose)
 
 
     implementation(libs.supabase.auth)
